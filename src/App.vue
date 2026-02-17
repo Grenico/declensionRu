@@ -2557,6 +2557,16 @@ const loadPracticeSentence = () => {
         possibleEndings: ['ю', 'у', 'а', 'ом'],
         explanation: 'здание 中性名词，词尾-е→-ю → зданию。',
         case3Type: 'replace'
+      },
+      {
+        id: 51,
+        text: 'Он разговаривает по <strong>телефон</strong>.',
+        targetWord: 'телефон',
+        originalEnding: '',
+        correctEnding: 'у',
+        possibleEndings: ['у', 'ю', 'ам', 'ям'],
+        explanation: 'телефон 是阳性名词，其第三格单数形式为 телефону。',
+        case3Type: 'append'
       }
     ]
     // 过滤出未使用的题目
@@ -2582,7 +2592,7 @@ const loadPracticeSentence = () => {
     // 记录已使用的题目ID
     usedPracticeSentences.value.push(selectedSentence.id)
     
-    practiceSentence.value = selectedSentence as PracticeSentence
+    practiceSentence.value = shufflePossibleEndings(selectedSentence) as PracticeSentence
   } else if (selectedCase.value === 4) {
     // 4格（宾格）训练题目库
     const case4Sentences = [
@@ -3000,16 +3010,6 @@ const loadPracticeSentence = () => {
       },
       {
         id: 41,
-        text: 'Он разговаривает по <strong>телефон</strong>.',
-        targetWord: 'телефон',
-        originalEnding: '',
-        correctEnding: '/',
-        possibleEndings: ['/', 'а', 'у', 'ом'],
-        explanation: 'телефон 阳性非动物名词，第四格不变。',
-        case4Type: 'nochange'
-      },
-      {
-        id: 42,
         text: 'Он читает <strong>роман</strong>.',
         targetWord: 'роман',
         originalEnding: '',
@@ -3019,7 +3019,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 43,
+        id: 42,
         text: 'Художник рисует <strong>портрет</strong>.',
         targetWord: 'портрет',
         originalEnding: '',
@@ -3029,7 +3029,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 44,
+        id: 43,
         text: 'Спортсмен играет в <strong>футбол</strong>.',
         targetWord: 'футбол',
         originalEnding: '',
@@ -3039,7 +3039,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 45,
+        id: 44,
         text: 'Мама готовит <strong>суп</strong>.',
         targetWord: 'суп',
         originalEnding: '',
@@ -3049,7 +3049,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 46,
+        id: 45,
         text: 'Они едят <strong>обед</strong>.',
         targetWord: 'обед',
         originalEnding: '',
@@ -3059,7 +3059,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 47,
+        id: 46,
         text: 'Папа читает <strong>журнал</strong>.',
         targetWord: 'журнал',
         originalEnding: '',
@@ -3069,7 +3069,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 48,
+        id: 47,
         text: 'Ты купил <strong>компьютер</strong>?',
         targetWord: 'компьютер',
         originalEnding: '',
@@ -3079,7 +3079,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 49,
+        id: 48,
         text: 'Он сидит на <strong>стул</strong>.',
         targetWord: 'стул',
         originalEnding: '',
@@ -3089,7 +3089,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 50,
+        id: 49,
         text: 'Ты видишь <strong>окно</strong>?',
         targetWord: 'окно',
         originalEnding: '',
@@ -3099,7 +3099,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 51,
+        id: 50,
         text: 'Ты ешь <strong>яблоко</strong>?',
         targetWord: 'яблоко',
         originalEnding: '',
@@ -3109,7 +3109,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 52,
+        id: 51,
         text: 'У нас есть <strong>время</strong>.',
         targetWord: 'время',
         originalEnding: '',
@@ -3119,7 +3119,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 53,
+        id: 52,
         text: 'Ты знаешь <strong>имя</strong>?',
         targetWord: 'имя',
         originalEnding: '',
@@ -3129,7 +3129,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 54,
+        id: 53,
         text: 'Он пишет <strong>письмо</strong>.',
         targetWord: 'письмо',
         originalEnding: '',
@@ -3139,7 +3139,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 55,
+        id: 54,
         text: 'Мы строим <strong>здание</strong>.',
         targetWord: 'здание',
         originalEnding: '',
@@ -3149,7 +3149,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 56,
+        id: 55,
         text: 'Они ищут <strong>место</strong>.',
         targetWord: 'место',
         originalEnding: '',
@@ -3159,7 +3159,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 57,
+        id: 56,
         text: 'Он едет на <strong>лошадь</strong>.',
         targetWord: 'лошадь',
         originalEnding: '',
@@ -3169,7 +3169,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 58,
+        id: 57,
         text: 'Ты видишь <strong>мышь</strong>?',
         targetWord: 'мышь',
         originalEnding: '',
@@ -3179,7 +3179,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 59,
+        id: 58,
         text: 'Мы помним <strong>мать</strong>.',
         targetWord: 'мать',
         originalEnding: '',
@@ -3189,7 +3189,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 60,
+        id: 59,
         text: 'Ты любишь <strong>дочь</strong>?',
         targetWord: 'дочь',
         originalEnding: '',
@@ -3199,7 +3199,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 61,
+        id: 60,
         text: 'Ты закрываешь <strong>дверь</strong>?',
         targetWord: 'дверь',
         originalEnding: '',
@@ -3209,7 +3209,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 62,
+        id: 61,
         text: 'Она открывает <strong>тетрадь</strong>.',
         targetWord: 'тетрадь',
         originalEnding: '',
@@ -3219,7 +3219,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 63,
+        id: 62,
         text: 'Ты видишь <strong>столы</strong>?',
         targetWord: 'столы',
         originalEnding: '',
@@ -3229,7 +3229,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 64,
+        id: 63,
         text: 'Мы строим <strong>дома</strong>.',
         targetWord: 'дома',
         originalEnding: '',
@@ -3239,7 +3239,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 65,
+        id: 64,
         text: 'Ты купил <strong>телефоны</strong>?',
         targetWord: 'телефоны',
         originalEnding: '',
@@ -3249,7 +3249,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 66,
+        id: 65,
         text: 'Ты читаешь <strong>книги</strong>?',
         targetWord: 'книги',
         originalEnding: '',
@@ -3259,7 +3259,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 67,
+        id: 66,
         text: 'Она чистит <strong>машины</strong>.',
         targetWord: 'машины',
         originalEnding: '',
@@ -3269,7 +3269,7 @@ const loadPracticeSentence = () => {
         case4Type: 'nochange'
       },
       {
-        id: 68,
+        id: 67,
         text: 'Ты видишь <strong>окна</strong>?',
         targetWord: 'окна',
         originalEnding: '',
@@ -3302,7 +3302,7 @@ const loadPracticeSentence = () => {
     // 记录已使用的题目ID
     usedPracticeSentences.value.push(selectedSentence.id)
     
-    practiceSentence.value = selectedSentence as PracticeSentence
+    practiceSentence.value = shufflePossibleEndings(selectedSentence) as PracticeSentence
   } else if (selectedCase.value === 5) {
     // 5格（工具格）训练题目库
     const case5Sentences = [
@@ -3735,7 +3735,7 @@ const loadPracticeSentence = () => {
     // 记录已使用的题目ID
     usedPracticeSentences.value.push(selectedSentence.id)
     
-    practiceSentence.value = selectedSentence as PracticeSentence
+    practiceSentence.value = shufflePossibleEndings(selectedSentence) as PracticeSentence
   } else if (selectedCase.value === 6) {
     // 6格（前置格）训练题目库
     const case6Sentences = [
@@ -4171,7 +4171,7 @@ const loadPracticeSentence = () => {
     // 记录已使用的题目ID
     usedPracticeSentences.value.push(selectedSentence.id)
     
-    practiceSentence.value = selectedSentence as PracticeSentence
+    practiceSentence.value = shufflePossibleEndings(selectedSentence) as PracticeSentence
   }
 }
 
@@ -4285,6 +4285,25 @@ onUnmounted(() => {
 // 下一题
 const nextQuestion = () => {
   loadPracticeSentence()
+}
+
+// 通用的数组打乱函数
+const shuffleArray = (array: any[]) => {
+  const arr = [...array]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const temp = arr[i]
+    arr[i] = arr[j]
+    arr[j] = temp
+  }
+  return arr
+}
+
+// 打乱possibleEndings数组，同时保持其他属性不变
+const shufflePossibleEndings = (sentence: any) => {
+  const shuffled = { ...sentence }
+  shuffled.possibleEndings = shuffleArray(sentence.possibleEndings)
+  return shuffled
 }
 </script>
 
