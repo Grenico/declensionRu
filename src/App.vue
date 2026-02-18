@@ -3360,11 +3360,11 @@ const loadPracticeSentence = () => {
         id: 6,
         text: 'Он наслаждается <strong>чай</strong>.',
         targetWord: 'чай',
-        originalEnding: '',
+        originalEnding: 'й',
         correctEnding: 'ем',
         possibleEndings: ['ем', 'я', 'ю', 'ом'],
-        explanation: 'чай 阳性名词，工具格直接加 -ем → чаем。',
-        case5Type: 'append'
+        explanation: 'чай阳性名词，工具格将й改为ем',
+        case5Type: 'replace'
       },
       {
         id: 7,
