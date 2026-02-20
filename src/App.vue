@@ -624,14 +624,14 @@ const generateTestQuestions = () => {
     { text: 'Он рисует карандаш.', targetWord: 'карандаш', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'ем', 'у'], explanation: 'карандаш 阳性名词，工具格直接加 -ом → карандашом。' },
     { text: 'Я пользуюсь телефон.', targetWord: 'телефон', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'телефон 阳性名词，工具格直接加 -ом → телефоном。' },
     { text: 'Студент пользуется учебник.', targetWord: 'учебник', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'учебник 阳性名词，工具格直接加 -ом → учебником。' },
-    { text: 'Он наслаждается чай.', targetWord: 'чай', originalEnding: '', correctEnding: 'ем', possibleEndings: ['ем', 'я', 'ю', 'ом'], explanation: 'чай 阳性名词，工具格直接加 -ем → чаем。' },
+    { text: 'Он наслаждается чай.', targetWord: 'чай', originalEnding: 'й', correctEnding: 'ем', possibleEndings: ['ем', 'я', 'ю', 'ом'], explanation: 'чай 阳性名词，工具格直接加 -ем → чаем。' },
     { text: 'Он ест суп с хлеб.', targetWord: 'хлеб', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'хлеб 阳性名词，工具格直接加 -ом → хлебом。' },
     { text: 'Я иду в кино с друг.', targetWord: 'друг', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'друг 阳性名词，工具格直接加 -ом → другом。' },
     { text: 'Она разговаривает с брат.', targetWord: 'брат', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'брат 阳性名词，工具格直接加 -ом → братом。' },
     { text: 'Он работает врач.', targetWord: 'врач', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'ем', 'у'], explanation: 'врач 阳性名词，工具格直接加 -ом → врачом。' },
     { text: 'Он стал студент.', targetWord: 'студент', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'студент 阳性名词，工具格直接加 -ом → студентом。' },
     { text: 'Я познакомился с сосед.', targetWord: 'сосед', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'сосед 阳性名词，工具格直接加 -ом → соседом。' },
-    { text: 'Он любуется окно.', targetWord: 'окно', originalEnding: '', correctEnding: 'м', possibleEndings: ['м', 'а', 'у', 'е'], explanation: 'окно 中性名词，工具格直接加 -м → окном。' },
+    { text: 'Он любуется окно.', targetWord: 'окно', originalEnding: '', correctEnding: '', possibleEndings: ['окном', 'окна', 'окну', 'окне'], explanation: 'окно 中性名词，工具格直接加 -м → окном。', correctFullWord: 'окном' },
     { text: 'Он думает над слово.', targetWord: 'слово', originalEnding: '', correctEnding: 'м', possibleEndings: ['м', 'а', 'у', 'е'], explanation: 'слово 中性名词，工具格直接加 -м → словом。' },
     { text: 'Он занят письмо.', targetWord: 'письмо', originalEnding: '', correctEnding: 'м', possibleEndings: ['м', 'а', 'у', 'е'], explanation: 'письмо 中性名词，工具格直接加 -м → письмом。' },
     { text: 'Мы любуемся море.', targetWord: 'море', originalEnding: '', correctEnding: 'м', possibleEndings: ['м', 'я', 'ю', 'е'], explanation: 'море 中性名词，工具格直接加 -м → морем。' },
@@ -773,6 +773,18 @@ const generateTestQuestions = () => {
     
     const uniqueOptions = [...new Set(options)]
     
+    // 打乱选项顺序，避免正确答案总是在同一个位置
+    const shuffledOptions = [...uniqueOptions]
+    for (let i = shuffledOptions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      const temp = shuffledOptions[i]
+      shuffledOptions[i] = shuffledOptions[j] as string
+      shuffledOptions[j] = temp as string
+    }
+    
+    // 找到打乱后的正确答案索引
+    const correctAnswerIndex = shuffledOptions.indexOf(correctAnswer)
+    
     // 更可靠的方法：先清理句子中的任何HTML标签
     let processedText = sentence.text
     processedText = processedText.replace(/<[^>]*>/g, '')
@@ -789,8 +801,8 @@ const generateTestQuestions = () => {
       id: index + 1,
       text: processedText,
       targetWord: sentence.targetWord,
-      options: uniqueOptions,
-      correctAnswer: uniqueOptions.indexOf(correctAnswer) >= 0 ? uniqueOptions.indexOf(correctAnswer) : 0,
+      options: shuffledOptions,
+      correctAnswer: correctAnswerIndex >= 0 ? correctAnswerIndex : 0,
       explanation: sentence.explanation
     }
   })
