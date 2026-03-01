@@ -1,14 +1,5611 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { HomeFilled, Document, ArrowLeft } from '@element-plus/icons-vue'
+import { HomeFilled, Document, ArrowLeft, Clock } from '@element-plus/icons-vue'
 
 // 当前选中的页面
 const currentPage = ref('home')
 const previousPage = ref('home') // 保存之前的页面状态，用于恢复会话
 
+// 页面导航历史记录栈
+const navigationHistory = ref<string[]>(['home']) // 初始只有主页
+const historyIndex = ref(0) // 当前在历史记录中的索引
+
 // 指定格训练相关状态
 const caseTrainingState = ref('select-case') // select-case, tutorial, practice
 const selectedCase = ref<number | null>(null)
+
+// 形容词训练和物主代词训练状态
+const adjPossTrainingState = ref('select-gender') // select-gender, practice
+const selectedGender = ref<string | null>(null) // 阳性/中性、阴性、复数
+const currentAdjPossType = ref<string>('') // 区分是形容词训练还是物主代词训练
+
+// 人称代词训练状态（已在其他位置声明）
+// const pronounTrainingState = ref('select-person') // select-person, practice
+// const selectedPerson = ref<string | null>(null) // 单数人称、复数人称
+const currentPersonalPronounSentence = ref<any>(null)
+const personalPronounSelectedEnding = ref('')
+const personalPronounShowDropdown = ref(false)
+const personalPronounAnswerResult = ref<string | null>(null)
+const personalPronounShowResult = ref(false)
+const usedPersonalPronounSentences = ref<number[]>([])
+
+// 形容词+名词组合训练状态
+const adjNounCombinedState = ref('practice') // practice
+const currentAdjNounSentence = ref<any>(null)
+const adjNounSelectedAdjective = ref('')
+const adjNounSelectedNoun = ref('')
+const adjNounShowDropdown = ref<'adjective' | 'noun' | null>(null)
+const adjNounDropdownTop = ref(0)
+const adjNounDropdownLeft = ref(0)
+const adjNounShowResult = ref(false)
+const adjNounAnswerResult = ref<string | null>(null)
+const usedAdjNounSentences = ref<number[]>([])
+
+// 物主代词+名词组合训练状态
+const possNounCombinedState = ref('practice') // practice
+const currentPossNounSentence = ref<any>(null)
+const possNounSelectedPronoun = ref('')
+const possNounSelectedNoun = ref('')
+const possNounShowDropdown = ref<'pronoun' | 'noun' | null>(null)
+const possNounDropdownTop = ref(0)
+const possNounDropdownLeft = ref(0)
+const possNounShowResult = ref(false)
+const possNounAnswerResult = ref<string | null>(null)
+const usedPossNounSentences = ref<number[]>([])
+
+// 形容词训练题目数据
+const adjectiveTrainingSentences = ref<Array<{
+  id: number
+  text: string
+  targetWord: string
+  originalEnding: string
+  correctEnding: string
+  possibleEndings: string[]
+  explanation: string
+  case: number
+  gender: string
+}>>([
+  // 阳性/中性训练题目
+  {
+    id: 1,
+    text: 'Это большой дом.',
+    targetWord: 'большой',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ого', 'ому', 'ым'],
+    explanation: '1格，阳性形容词不变。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 2,
+    text: 'Здесь вкусный кофе.',
+    targetWord: 'вкусный',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ого', 'ому', 'ым'],
+    explanation: '1格，阳性形容词不变。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 3,
+    text: 'Наступил холодный вечер.',
+    targetWord: 'холодный',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ого', 'ому', 'ым'],
+    explanation: '1格，阳性形容词不变。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 4,
+    text: 'Это современный город.',
+    targetWord: 'современный',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ого', 'ому', 'ым'],
+    explanation: '1格，阳性形容词不变。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 5,
+    text: 'Мой любимый фильм начинается.',
+    targetWord: 'любимый',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ого', 'ому', 'ым'],
+    explanation: '1格，阳性形容词不变。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 6,
+    text: 'Это интересный журнал.',
+    targetWord: 'интересный',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ого', 'ому', 'ым'],
+    explanation: '1格，阳性形容词不变。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 7,
+    text: 'У меня есть новый телефон.',
+    targetWord: 'новый',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ого', 'ому', 'ым'],
+    explanation: '1格，阳性形容词不变。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 8,
+    text: 'Это высокий здание.',
+    targetWord: 'высокий',
+    originalEnding: '',
+    correctEnding: 'ое',
+    possibleEndings: ['ое', 'ого', 'ому', 'ым'],
+    explanation: '1格，中性形容词词尾为-ое。',
+    case: 1,
+    gender: '中性'
+  },
+  {
+    id: 9,
+    text: 'У меня нет новый телефона.',
+    targetWord: 'новый',
+    originalEnding: '',
+    correctEnding: 'ого',
+    possibleEndings: ['ого', '/', 'ому', 'ым'],
+    explanation: '2格，阳性形容词词尾为-ого。',
+    case: 2,
+    gender: '阳性'
+  },
+  {
+    id: 10,
+    text: 'У него нет свободный времени.',
+    targetWord: 'свободный',
+    originalEnding: '',
+    correctEnding: 'ого',
+    possibleEndings: ['ого', '/', 'ому', 'ым'],
+    explanation: '2格，中性形容词词尾为-ого。',
+    case: 2,
+    gender: '中性'
+  },
+  {
+    id: 11,
+    text: 'У нас нет горячий чая.',
+    targetWord: 'горячий',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', 'ого', 'ому', '/'],
+    explanation: '2格，阳性形容词（г,к,х后）词尾为-его。',
+    case: 2,
+    gender: '阳性'
+  },
+  {
+    id: 12,
+    text: 'Я не вижу белый снега.',
+    targetWord: 'белый',
+    originalEnding: '',
+    correctEnding: 'ого',
+    possibleEndings: ['ого', '/', 'ому', 'ым'],
+    explanation: '2格，阳性形容词词尾为-ого。',
+    case: 2,
+    gender: '阳性'
+  },
+  {
+    id: 13,
+    text: 'В парке нет высокий дерева.',
+    targetWord: 'высокий',
+    originalEnding: '',
+    correctEnding: 'ого',
+    possibleEndings: ['ого', '/', 'ому', 'ым'],
+    explanation: '2格，中性形容词词尾为-ого。',
+    case: 2,
+    gender: '中性'
+  },
+  {
+    id: 14,
+    text: 'У меня нет свежий хлеба.',
+    targetWord: 'свежий',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', 'ого', 'ому', '/'],
+    explanation: '2格，阳性形容词（ж后）词尾为-его。',
+    case: 2,
+    gender: '阳性'
+  },
+  {
+    id: 15,
+    text: 'Мы ждем приезда дорогой гостя.',
+    targetWord: 'дорогой',
+    originalEnding: '',
+    correctEnding: 'ого',
+    possibleEndings: ['ого', '/', 'ому', 'ым'],
+    explanation: '2格，阳性形容词词尾为-ого。',
+    case: 2,
+    gender: '阳性'
+  },
+  {
+    id: 16,
+    text: 'У нее нет чистый воздуха.',
+    targetWord: 'чистый',
+    originalEnding: '',
+    correctEnding: 'ого',
+    possibleEndings: ['ого', '/', 'ому', 'ым'],
+    explanation: '2格，阳性形容词词尾为-ого。',
+    case: 2,
+    gender: '阳性'
+  },
+  {
+    id: 17,
+    text: 'Я подошел к высокий зданию.',
+    targetWord: 'высокий',
+    originalEnding: '',
+    correctEnding: 'ому',
+    possibleEndings: ['ому', 'ого', '/', 'ым'],
+    explanation: '3格，中性形容词词尾为-ому。',
+    case: 3,
+    gender: '中性'
+  },
+  {
+    id: 18,
+    text: 'Я еду к старый другу.',
+    targetWord: 'старый',
+    originalEnding: '',
+    correctEnding: 'ому',
+    possibleEndings: ['ому', 'ого', '/', 'ым'],
+    explanation: '3格，阳性形容词词尾为-ому。',
+    case: 3,
+    gender: '阳性'
+  },
+  {
+    id: 19,
+    text: 'Мы готовимся к трудный экзамену.',
+    targetWord: 'трудный',
+    originalEnding: '',
+    correctEnding: 'ому',
+    possibleEndings: ['ому', 'ого', 'ному', '/'],
+    explanation: '3格，阳性形容词词尾为-ому。',
+    case: 3,
+    gender: '阳性'
+  },
+  {
+    id: 20,
+    text: 'Он относится к важный вопросу.',
+    targetWord: 'важный',
+    originalEnding: '',
+    correctEnding: 'ому',
+    possibleEndings: ['ому', 'ого', 'ному', '/'],
+    explanation: '3格，阳性形容词词尾为-ому。',
+    case: 3,
+    gender: '阳性'
+  },
+  {
+    id: 21,
+    text: 'Я завидую удачливый человеку.',
+    targetWord: 'удачливый',
+    originalEnding: '',
+    correctEnding: 'ому',
+    possibleEndings: ['ому', 'ого', '/', 'ым'],
+    explanation: '3格，阳性形容词词尾为-ому。',
+    case: 3,
+    gender: '阳性'
+  },
+  {
+    id: 22,
+    text: 'Мы идем по широкий проспекту.',
+    targetWord: 'широкий',
+    originalEnding: '',
+    correctEnding: 'ому',
+    possibleEndings: ['ому', 'ого', '/', 'ым'],
+    explanation: '3格，阳性形容词词尾为-ому。',
+    case: 3,
+    gender: '阳性'
+  },
+  {
+    id: 23,
+    text: 'Он подошел к открытый окну.',
+    targetWord: 'открытый',
+    originalEnding: '',
+    correctEnding: 'ому',
+    possibleEndings: ['ому', 'ого', '/', 'ым'],
+    explanation: '3格，中性形容词词尾为-ому。',
+    case: 3,
+    gender: '中性'
+  },
+  {
+    id: 24,
+    text: 'Дети рады новый году.',
+    targetWord: 'новый',
+    originalEnding: '',
+    correctEnding: 'ому',
+    possibleEndings: ['ому', 'ого', '/', 'ым'],
+    explanation: '3格，阳性形容词词尾为-ому。',
+    case: 3,
+    gender: '阳性'
+  },
+  {
+    id: 25,
+    text: 'Я вижу красивый парк.',
+    targetWord: 'красивый',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ого', 'ому', 'ым'],
+    explanation: '4格非动物，阳性形容词不变。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 26,
+    text: 'Я купил синий костюм.',
+    targetWord: 'синий',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ого', 'ому', 'ым'],
+    explanation: '4格非动物，阳性形容词不变。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 27,
+    text: 'Он потерял старый ключ.',
+    targetWord: 'старый',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ого', 'ому', 'ым'],
+    explanation: '4格非动物，阳性形容词不变。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 28,
+    text: 'Она надела красный плащ.',
+    targetWord: 'красный',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ого', 'ому', 'ым'],
+    explanation: '4格非动物，阳性形容词不变。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 29,
+    text: 'Я люблю русский язык.',
+    targetWord: 'русский',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ого', 'ому', 'ым'],
+    explanation: '4格非动物，阳性形容词不变。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 30,
+    text: 'Мы ждем новый автобус.',
+    targetWord: 'новый',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ого', 'ому', 'ым'],
+    explanation: '4格非动物，阳性形容词不变。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 31,
+    text: 'Я встретил старый друга.',
+    targetWord: 'старый',
+    originalEnding: '',
+    correctEnding: 'ого',
+    possibleEndings: ['ого', '/', 'ому', 'ым'],
+    explanation: '4格动物，阳性形容词词尾为-ого（同2格）。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 32,
+    text: 'Она ждет любимый человека.',
+    targetWord: 'любимый',
+    originalEnding: '',
+    correctEnding: 'ого',
+    possibleEndings: ['ого', '/', 'ому', 'ым'],
+    explanation: '4格动物，阳性形容词词尾为-ого（同2格）。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 33,
+    text: 'Мы уважаем умный преподавателя.',
+    targetWord: 'умный',
+    originalEnding: '',
+    correctEnding: 'ого',
+    possibleEndings: ['ого', '/', 'ому', 'ым'],
+    explanation: '4格动物，阳性形容词词尾为-ого（同2格）。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 34,
+    text: 'Я вижу красивый парня.',
+    targetWord: 'красивый',
+    originalEnding: '',
+    correctEnding: 'ого',
+    possibleEndings: ['ого', '/', 'ому', 'ым'],
+    explanation: '4格动物，阳性形容词词尾为-ого（同2格）。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 35,
+    text: 'Он гордится старый другом.',
+    targetWord: 'старый',
+    originalEnding: '',
+    correctEnding: 'ым',
+    possibleEndings: ['ым', 'ого', 'ому', '/'],
+    explanation: '5格，阳性形容词词尾为-ым。',
+    case: 5,
+    gender: '阳性'
+  },
+  {
+    id: 36,
+    text: 'Он работает с хороший инженером.',
+    targetWord: 'хороший',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'ого', 'ому', '/'],
+    explanation: '5格，阳性形容词（ш后）词尾为-им。',
+    case: 5,
+    gender: '阳性'
+  },
+  {
+    id: 37,
+    text: 'Он был доволен новый результатом.',
+    targetWord: 'новый',
+    originalEnding: '',
+    correctEnding: 'ым',
+    possibleEndings: ['ым', 'ого', 'ому', '/'],
+    explanation: '5格，阳性形容词词尾为-ым。',
+    case: 5,
+    gender: '阳性'
+  },
+  {
+    id: 38,
+    text: 'Он любуется красивый закатом.',
+    targetWord: 'красивый',
+    originalEnding: '',
+    correctEnding: 'ым',
+    possibleEndings: ['ым', 'ого', 'ому', '/'],
+    explanation: '5格，阳性形容词词尾为-ым。',
+    case: 5,
+    gender: '阳性'
+  },
+  {
+    id: 39,
+    text: 'Он управляет большой судном.',
+    targetWord: 'большой',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'ого', 'ому', '/'],
+    explanation: '5格，中性形容词（ш后）词尾为-им。',
+    case: 5,
+    gender: '中性'
+  },
+  {
+    id: 40,
+    text: 'Он стал известный писателем.',
+    targetWord: 'известный',
+    originalEnding: '',
+    correctEnding: 'ым',
+    possibleEndings: ['ым', 'ого', 'ому', '/'],
+    explanation: '5格，阳性形容词词尾为-ым。',
+    case: 5,
+    gender: '阳性'
+  },
+  {
+    id: 41,
+    text: 'Мы гордимся старый университетом.',
+    targetWord: 'старый',
+    originalEnding: '',
+    correctEnding: 'ым',
+    possibleEndings: ['ым', 'ого', 'ому', '/'],
+    explanation: '5格，阳性形容词词尾为-ым。',
+    case: 5,
+    gender: '阳性'
+  },
+  {
+    id: 42,
+    text: 'Он занимается с трудный учеником.',
+    targetWord: 'трудный',
+    originalEnding: '',
+    correctEnding: 'ым',
+    possibleEndings: ['ым', 'ого', 'ому', '/'],
+    explanation: '5格，阳性形容词词尾为-ым。',
+    case: 5,
+    gender: '阳性'
+  },
+  {
+    id: 43,
+    text: 'Мы говорили о интересный фильме.',
+    targetWord: 'интересный',
+    originalEnding: '',
+    correctEnding: 'ом',
+    possibleEndings: ['ом', 'ого', 'ому', '/'],
+    explanation: '6格，阳性形容词词尾为-ом。',
+    case: 6,
+    gender: '阳性'
+  },
+  {
+    id: 44,
+    text: 'Мы думаем о будущий отпуске.',
+    targetWord: 'будущий',
+    originalEnding: '',
+    correctEnding: 'ем',
+    possibleEndings: ['ем', 'ого', 'ому', '/'],
+    explanation: '6格，阳性形容词（щ后）词尾为-ем。',
+    case: 6,
+    gender: '阳性'
+  },
+  {
+    id: 45,
+    text: 'Я мечтаю о собственный доме.',
+    targetWord: 'собственный',
+    originalEnding: '',
+    correctEnding: 'ом',
+    possibleEndings: ['ом', 'ого', 'ому', '/'],
+    explanation: '6格，阳性形容词词尾为-ом。',
+    case: 6,
+    gender: '阳性'
+  },
+  {
+    id: 46,
+    text: 'Они говорят о важный вопросе.',
+    targetWord: 'важный',
+    originalEnding: '',
+    correctEnding: 'ом',
+    possibleEndings: ['ом', 'ого', 'ому', '/'],
+    explanation: '6格，阳性形容词词尾为-ом。',
+    case: 6,
+    gender: '阳性'
+  },
+  {
+    id: 47,
+    text: 'Мы думаем о предстоящий экзамене.',
+    targetWord: 'предстоящий',
+    originalEnding: '',
+    correctEnding: 'ем',
+    possibleEndings: ['ем', 'ого', 'ому', '/'],
+    explanation: '6格，阳性形容词（щ后）词尾为-ем。',
+    case: 6,
+    gender: '阳性'
+  },
+  {
+    id: 48,
+    text: 'Расскажи о интересный путешествии.',
+    targetWord: 'интересный',
+    originalEnding: '',
+    correctEnding: 'ом',
+    possibleEndings: ['ом', 'ого', 'ому', '/'],
+    explanation: '6格，中性形容词词尾为-ом。',
+    case: 6,
+    gender: '中性'
+  },
+  {
+    id: 49,
+    text: 'Я думаю о письменный столе.',
+    targetWord: 'письменный',
+    originalEnding: '',
+    correctEnding: 'ом',
+    possibleEndings: ['ом', 'ого', 'ому', '/'],
+    explanation: '6格，阳性形容词词尾为-ом。',
+    case: 6,
+    gender: '阳性'
+  },
+  {
+    id: 50,
+    text: 'Мы говорили о летний отдыхе.',
+    targetWord: 'летний',
+    originalEnding: '',
+    correctEnding: 'ем',
+    possibleEndings: ['ем', 'ого', 'ому', '/'],
+    explanation: '6格，阳性形容词（н后软）词尾为-ем。',
+    case: 6,
+    gender: '阳性'
+  },
+  // 阴性训练题目
+  {
+    id: 51,
+    text: 'Это новая книга.',
+    targetWord: 'новая',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ой', 'ую', 'ей'],
+    explanation: '1格，阴性形容词不变。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 52,
+    text: 'Наступила тёплая весна.',
+    targetWord: 'тёплая',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ой', 'ую', 'ей'],
+    explanation: '1格，阴性形容词不变。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 53,
+    text: 'Моя любимая сестра приехала.',
+    targetWord: 'любимая',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ой', 'ую', 'ей'],
+    explanation: '1格，阴性形容词不变。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 54,
+    text: 'Здесь вкусная пицца.',
+    targetWord: 'вкусная',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ой', 'ую', 'ей'],
+    explanation: '1格，阴性形容词不变。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 55,
+    text: 'Какая красивая девушка!',
+    targetWord: 'красивая',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ой', 'ую', 'ей'],
+    explanation: '1格，阴性形容词不变。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 56,
+    text: 'Это высокая гора.',
+    targetWord: 'высокая',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ой', 'ую', 'ей'],
+    explanation: '1格，阴性形容词不变。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 57,
+    text: 'Чистая вода в стакане.',
+    targetWord: 'Чистая',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ой', 'ую', 'ей'],
+    explanation: '1格，阴性形容词不变。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 58,
+    text: 'Интересная история началась.',
+    targetWord: 'Интересная',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ой', 'ую', 'ей'],
+    explanation: '1格，阴性形容词不变。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 59,
+    text: 'У меня нет новая книги.',
+    targetWord: 'новая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '2格，阴性形容词词尾为-ой。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 60,
+    text: 'Цена этой красивая машины высока.',
+    targetWord: 'красивая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '2格，阴性形容词词尾为-ой。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 61,
+    text: 'Он ждёт ответа от важная персоны.',
+    targetWord: 'важная',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '2格，阴性形容词词尾为-ой。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 62,
+    text: 'Мы остановились у широкая реки.',
+    targetWord: 'широкая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '2格，阴性形容词词尾为-ой。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 64,
+    text: 'Цвет красная розы яркий.',
+    targetWord: 'красная',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '2格，阴性形容词词尾为-ой。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 65,
+    text: 'Дверь новая квартиры открыта.',
+    targetWord: 'новая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '2格，阴性形容词词尾为-ой。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 66,
+    text: 'Вкус холодная воды приятен.',
+    targetWord: 'холодная',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '2格，阴性形容词词尾为-ой。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 67,
+    text: 'Я иду к красивая площади.',
+    targetWord: 'красивая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '3格，阴性形容词词尾为-ой。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 68,
+    text: 'По широкая улице ходят люди.',
+    targetWord: 'широкая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '3格，阴性形容词词尾为-ой。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 69,
+    text: 'Мы рады тёплая погоде.',
+    targetWord: 'тёплая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '3格，阴性形容词词尾为-ой。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 70,
+    text: 'Помоги старая бабушке.',
+    targetWord: 'старая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '3格，阴性形容词词尾为-ой。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 71,
+    text: 'Он готовится к трудная контрольной.',
+    targetWord: 'трудная',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '3格，阴性形容词词尾为-ой。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 72,
+    text: 'По мокрая траве приятно ходить.',
+    targetWord: 'мокрая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '3格，阴性形容词词尾为-ой。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 73,
+    text: 'К высокая горе ведёт тропа.',
+    targetWord: 'высокая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '3格，阴性形容词词尾为-ой。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 74,
+    text: 'Она обрадовалась новая сумке.',
+    targetWord: 'новая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '3格，阴性形容词词尾为-ой。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 75,
+    text: 'Я вижу новая машину.',
+    targetWord: 'новая',
+    originalEnding: '',
+    correctEnding: 'ую',
+    possibleEndings: ['ую', '/', 'ой', 'ей'],
+    explanation: '4格，阴性形容词词尾为-ую。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 76,
+    text: 'Он купил красивая рубашку.',
+    targetWord: 'красивая',
+    originalEnding: '',
+    correctEnding: 'ую',
+    possibleEndings: ['ую', '/', 'ой', 'ей'],
+    explanation: '4格，阴性形容词词尾为-ую。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 77,
+    text: 'Мы любим русская литературу.',
+    targetWord: 'русская',
+    originalEnding: '',
+    correctEnding: 'ую',
+    possibleEndings: ['ую', '/', 'ой', 'ей'],
+    explanation: '4格，阴性形容词词尾为-ую。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 78,
+    text: 'Я жду старая подругу.',
+    targetWord: 'старая',
+    originalEnding: '',
+    correctEnding: 'ую',
+    possibleEndings: ['ую', '/', 'ой', 'ей'],
+    explanation: '4格，阴性形容词词尾为-ую。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 79,
+    text: 'Он потерял интересная книгу.',
+    targetWord: 'интересная',
+    originalEnding: '',
+    correctEnding: 'ую',
+    possibleEndings: ['ую', '/', 'ой', 'ей'],
+    explanation: '4格，阴性形容词词尾为-ую。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 80,
+    text: 'Мы слушаем громкая музыку.',
+    targetWord: 'громкая',
+    originalEnding: '',
+    correctEnding: 'ую',
+    possibleEndings: ['ую', '/', 'ой', 'ей'],
+    explanation: '4格，阴性形容词词尾为-ую。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 81,
+    text: 'Она пьёт горячая воду.',
+    targetWord: 'горячая',
+    originalEnding: '',
+    correctEnding: 'ую',
+    possibleEndings: ['ую', '/', 'ой', 'ей'],
+    explanation: '4格，阴性形容词词尾为-ую。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 82,
+    text: 'Я встретил умная девушку.',
+    targetWord: 'умная',
+    originalEnding: '',
+    correctEnding: 'ую',
+    possibleEndings: ['ую', '/', 'ой', 'ей'],
+    explanation: '4格，阴性形容词词尾为-ую。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 83,
+    text: 'Он читает свежая газету.',
+    targetWord: 'свежая',
+    originalEnding: '',
+    correctEnding: 'ую',
+    possibleEndings: ['ую', '/', 'ой', 'ей'],
+    explanation: '4格，阴性形容词词尾为-ую。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 84,
+    text: 'Я горжусь новая работой.',
+    targetWord: 'новая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '5格，阴性形容词词尾为-ой。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 85,
+    text: 'Он интересуется русская историей.',
+    targetWord: 'русская',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '5格，阴性形容词词尾为-ой。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 86,
+    text: 'Мы любуемся красивая природой.',
+    targetWord: 'красивая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '5格，阴性形容词词尾为-ой。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 87,
+    text: 'Она стала известная актрисой.',
+    targetWord: 'известная',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '5格，阴性形容词词尾为-ой。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 88,
+    text: 'Я доволен хорошая оценкой.',
+    targetWord: 'хорошая',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ой', '/', 'ую'],
+    explanation: '5格，阴性形容词词尾为-ей。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 89,
+    text: 'Он занимается с трудная ученицей.',
+    targetWord: 'трудная',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '5格，阴性形容词词尾为-ой。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 90,
+    text: 'Мы поехали на такси с весёлая компанией.',
+    targetWord: 'весёлая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '5格，阴性形容词词尾为-ой。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 91,
+    text: 'Она работает над важная проблемой.',
+    targetWord: 'важная',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '5格，阴性形容词词尾为-ой。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 92,
+    text: 'Мы говорили о новая работе.',
+    targetWord: 'новая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '6格，阴性形容词词尾为-ой。',
+    case: 6,
+    gender: '阴性'
+  },
+  {
+    id: 93,
+    text: 'Он мечтает о красивая девушке.',
+    targetWord: 'красивая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '6格，阴性形容词词尾为-ой。',
+    case: 6,
+    gender: '阴性'
+  },
+  {
+    id: 94,
+    text: 'В старая книге много стихов.',
+    targetWord: 'старая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '6格，阴性形容词词尾为-ой。',
+    case: 6,
+    gender: '阴性'
+  },
+  {
+    id: 95,
+    text: 'При встрече с подругой она вспоминала о летняя поездке.',
+    targetWord: 'летняя',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ой', '/', 'ую'],
+    explanation: '6格，阴性形容词词尾为-ей。',
+    case: 6,
+    gender: '阴性'
+  },
+  {
+    id: 96,
+    text: 'Я думаю о любимая маме.',
+    targetWord: 'любимая',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '6格，阴性形容词词尾为-ой。',
+    case: 6,
+    gender: '阴性'
+  },
+  {
+    id: 97,
+    text: 'В соседняя комнате кто-то есть.',
+    targetWord: 'соседняя',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ой', '/', 'ую'],
+    explanation: '6格，阴性形容词词尾为-ей。',
+    case: 6,
+    gender: '阴性'
+  },
+  {
+    id: 98,
+    text: 'В холодная воде купаться нельзя.',
+    targetWord: 'холодная',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '6格，阴性形容词词尾为-ой。',
+    case: 6,
+    gender: '阴性'
+  },
+  {
+    id: 99,
+    text: 'Он рассказывал о интересная встрече.',
+    targetWord: 'интересная',
+    originalEnding: '',
+    correctEnding: 'ой',
+    possibleEndings: ['ой', '/', 'ую', 'ей'],
+    explanation: '6格，阴性形容词词尾为-ой。',
+    case: 6,
+    gender: '阴性'
+  },
+  {
+    id: 100,
+    text: 'О будущая профессии нужно думать.',
+    targetWord: 'будущая',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ой', '/', 'ую'],
+    explanation: '6格，阴性形容词词尾为-ей。',
+    case: 6,
+    gender: '阴性'
+  },
+  // 复数训练题目
+  {
+    id: 101,
+    text: 'Это новые книги.',
+    targetWord: 'новые',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ых', 'ым', 'ыми'],
+    explanation: '1格，复数形容词不变。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 102,
+    text: 'Наступили холодные дни.',
+    targetWord: 'холодные',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ых', 'ым', 'ыми'],
+    explanation: '1格，复数形容词不变。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 103,
+    text: 'Мои любимые родители приехали.',
+    targetWord: 'любимые',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ых', 'ым', 'ыми'],
+    explanation: '1格，复数形容词不变。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 104,
+    text: 'Здесь работают опытные врачи.',
+    targetWord: 'опытные',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ых', 'ым', 'ыми'],
+    explanation: '1格，复数形容词不变。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 105,
+    text: 'Какие красивые цветы!',
+    targetWord: 'красивые',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ых', 'ым', 'ыми'],
+    explanation: '1格，复数形容词不变。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 106,
+    text: 'Это высокие здания.',
+    targetWord: 'высокие',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'их', 'им', 'ими'],
+    explanation: '1格，复数形容词不变。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 107,
+    text: 'Чистые окна блестят.',
+    targetWord: 'Чистые',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ых', 'ым', 'ыми'],
+    explanation: '1格，复数形容词不变。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 108,
+    text: 'Интересные фильмы идут в кино.',
+    targetWord: 'Интересные',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ых', 'ым', 'ыми'],
+    explanation: '1格，复数形容词不变。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 109,
+    text: 'У меня нет новые книг.',
+    targetWord: 'новые',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '2格，复数形容词词尾为-ых。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 110,
+    text: 'Цена этих красивые машин слишком высока.',
+    targetWord: 'красивые',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '2格，复数形容词词尾为-ых。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 111,
+    text: 'Он ждёт ответов от важные персон.',
+    targetWord: 'важные',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '2格，复数形容词词尾为-ых。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 112,
+    text: 'Мы остановились у широкие рек.',
+    targetWord: 'широкие',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '2格，复数形容词词尾为-ых。',
+    case: 2,
+    gender: '复数'
+  },
+
+  {
+    id: 114,
+    text: 'Лепестки красные роз опали.',
+    targetWord: 'красные',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '2格，复数形容词词尾为-ых。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 115,
+    text: 'Двери новые квартир открыты.',
+    targetWord: 'новые',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '2格，复数形容词词尾为-ых。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 116,
+    text: 'Вкус холодные напитков приятен.',
+    targetWord: 'холодные',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '2格，复数形容词词尾为-ых。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 117,
+    text: 'Я иду к красивые площадям.',
+    targetWord: 'красивые',
+    originalEnding: '',
+    correctEnding: 'ым',
+    possibleEndings: ['ым', '/', 'ых', 'ыми'],
+    explanation: '3格，复数形容词词尾为-ым。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 118,
+    text: 'По широкие улицам ходят люди.',
+    targetWord: 'широкие',
+    originalEnding: '',
+    correctEnding: 'ым',
+    possibleEndings: ['ым', '/', 'ых', 'ыми'],
+    explanation: '3格，复数形容词词尾为-ым。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 119,
+    text: 'Дети рады новогодние подаркам.',
+    targetWord: 'новогодние',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', '/', 'ых', 'ыми'],
+    explanation: '3格，复数形容词词尾为-им。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 120,
+    text: 'Помоги старые людям.',
+    targetWord: 'старые',
+    originalEnding: '',
+    correctEnding: 'ым',
+    possibleEndings: ['ым', '/', 'ых', 'ыми'],
+    explanation: '3格，复数形容词词尾为-ым。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 121,
+    text: 'Он готовится к трудные экзаменам.',
+    targetWord: 'трудные',
+    originalEnding: '',
+    correctEnding: 'ым',
+    possibleEndings: ['ым', '/', 'ых', 'ыми'],
+    explanation: '3格，复数形容词词尾为-ым。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 122,
+    text: 'По мокрые тропам трудно идти.',
+    targetWord: 'мокрые',
+    originalEnding: '',
+    correctEnding: 'ым',
+    possibleEndings: ['ым', '/', 'ых', 'ыми'],
+    explanation: '3格，复数形容词词尾为-ым。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 123,
+    text: 'К высокие горам ведут тропы.',
+    targetWord: 'высокие',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', '/', 'их', 'ими'],
+    explanation: '3格，复数形容词词尾为-им。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 124,
+    text: 'Она обрадовалась новые сумкам.',
+    targetWord: 'новые',
+    originalEnding: '',
+    correctEnding: 'ым',
+    possibleEndings: ['ым', '/', 'ых', 'ыми'],
+    explanation: '3格，复数形容词词尾为-ым。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 125,
+    text: 'Я вижу новые машины.',
+    targetWord: 'новые',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ых', 'ым', 'ыми'],
+    explanation: '4格非动物，复数形容词不变。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 126,
+    text: 'Он купил красивые рубашки.',
+    targetWord: 'красивые',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ых', 'ым', 'ыми'],
+    explanation: '4格非动物，复数形容词不变。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 127,
+    text: 'Мы любим русские песни.',
+    targetWord: 'русские',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'их', 'им', 'ими'],
+    explanation: '4格非动物，复数形容词不变。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 128,
+    text: 'Я жду свои старые друзей.',
+    targetWord: 'старые',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '4格动物，复数形容词词尾为-ых。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 129,
+    text: 'Он потерял интересные книги.',
+    targetWord: 'интересные',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'ых', 'ым', 'ыми'],
+    explanation: '4格非动物，复数形容词不变。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 130,
+    text: 'Мы слушаем громкие песни.',
+    targetWord: 'громкие',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'их', 'им', 'ими'],
+    explanation: '4格非动物，复数形容词不变。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 131,
+    text: 'Она пьёт горячие напитки.',
+    targetWord: 'горячие',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'их', 'им', 'ими'],
+    explanation: '4格非动物，复数形容词不变。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 132,
+    text: 'Я встретил умные студенток.',
+    targetWord: 'умные',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '4格动物，复数形容词词尾为-ых。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 133,
+    text: 'Он читает свежие газеты.',
+    targetWord: 'свежие',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'их', 'им', 'ими'],
+    explanation: '4格非动物，复数形容词不变。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 134,
+    text: 'Я горжусь своими новые работами.',
+    targetWord: 'новые',
+    originalEnding: '',
+    correctEnding: 'ыми',
+    possibleEndings: ['ыми', '/', 'ых', 'ым'],
+    explanation: '5格，复数形容词词尾为-ыми。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 135,
+    text: 'Он интересуется русские традициями.',
+    targetWord: 'русские',
+    originalEnding: '',
+    correctEnding: 'ими',
+    possibleEndings: ['ими', '/', 'их', 'ым'],
+    explanation: '5格，复数形容词词尾为-ими。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 136,
+    text: 'Мы любуемся красивые пейзажами.',
+    targetWord: 'красивые',
+    originalEnding: '',
+    correctEnding: 'ыми',
+    possibleEndings: ['ыми', '/', 'ых', 'ым'],
+    explanation: '5格，复数形容词词尾为-ыми。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 137,
+    text: 'Они стали известные актёрами.',
+    targetWord: 'известные',
+    originalEnding: '',
+    correctEnding: 'ыми',
+    possibleEndings: ['ыми', '/', 'ых', 'ым'],
+    explanation: '5格，复数形容词词尾为-ыми。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 138,
+    text: 'Я доволен своими хорошие оценками.',
+    targetWord: 'хорошие',
+    originalEnding: '',
+    correctEnding: 'ими',
+    possibleEndings: ['ими', '/', 'ых', 'ым'],
+    explanation: '5格，复数形容词词尾为-ими。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 139,
+    text: 'Он занимается с трудные учениками.',
+    targetWord: 'трудные',
+    originalEnding: '',
+    correctEnding: 'ыми',
+    possibleEndings: ['ыми', '/', 'ых', 'ым'],
+    explanation: '5格，复数形容词词尾为-ыми。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 140,
+    text: 'Мы поехали на экскурсию с весёлые компаниями.',
+    targetWord: 'весёлые',
+    originalEnding: '',
+    correctEnding: 'ыми',
+    possibleEndings: ['ыми', '/', 'ых', 'ым'],
+    explanation: '5格，复数形容词词尾为-ыми。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 141,
+    text: 'Она работает над важные проблемами.',
+    targetWord: 'важные',
+    originalEnding: '',
+    correctEnding: 'ыми',
+    possibleEndings: ['ыми', '/', 'ых', 'ым'],
+    explanation: '5格，复数形容词词尾为-ыми。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 142,
+    text: 'Мы говорили о новые фильмах.',
+    targetWord: 'новые',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '6格，复数形容词词尾为-ых。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 143,
+    text: 'Он мечтает о красивые девушках.',
+    targetWord: 'красивые',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '6格，复数形容词词尾为-ых。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 144,
+    text: 'В эти старые книгах много стихов.',
+    targetWord: 'старые',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '6格，复数形容词词尾为-ых。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 145,
+    text: 'При встрече с друзьями она вспоминала о летние поездках.',
+    targetWord: 'летние',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', '/', 'ым', 'ыми'],
+    explanation: '6格，复数形容词词尾为-их。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 146,
+    text: 'Я думаю о свои любимые родителях.',
+    targetWord: 'любимые',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '6格，复数形容词词尾为-ых。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 147,
+    text: 'В соседние комнатах кто-то есть.',
+    targetWord: 'соседние',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', '/', 'ым', 'ыми'],
+    explanation: '6格，复数形容词词尾为-их。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 148,
+    text: 'В холодные водах купаться нельзя.',
+    targetWord: 'холодные',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '6格，复数形容词词尾为-ых。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 149,
+    text: 'Он рассказывал о интересные встречах.',
+    targetWord: 'интересные',
+    originalEnding: '',
+    correctEnding: 'ых',
+    possibleEndings: ['ых', '/', 'ым', 'ыми'],
+    explanation: '6格，复数形容词词尾为-ых。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 150,
+    text: 'О будущие профессиях нужно думать.',
+    targetWord: 'будущие',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', '/', 'ым', 'ыми'],
+    explanation: '6格，复数形容词词尾为-их。',
+    case: 6,
+    gender: '复数'
+  }
+])
+
+// 人称代词训练题目数据
+const personalPronounTrainingSentences = ref<Array<{
+  id: number
+  text: string
+  targetWord: string
+  originalEnding: string
+  correctEnding: string
+  possibleEndings: string[]
+  explanation: string
+  case: number
+  gender: string
+}>>([
+  // 单数人称训练题目
+  {
+    id: 1,
+    text: 'Дай я книгу.',
+    targetWord: 'я',
+    originalEnding: '',
+    correctEnding: 'мне',
+    possibleEndings: ['мне', 'меня', 'мной', 'мною'],
+    explanation: '3格，动词 дать 要求与格',
+    case: 3,
+    gender: '单数'
+  },
+  {
+    id: 2,
+    text: 'Я иду к ты в гости.',
+    targetWord: 'ты',
+    originalEnding: '',
+    correctEnding: 'тебе',
+    possibleEndings: ['тебе', 'тебя', 'тобой', 'тобою'],
+    explanation: '3格，介词 к 要求与格',
+    case: 3,
+    gender: '单数'
+  },
+  {
+    id: 3,
+    text: 'Ты видел он вчера?',
+    targetWord: 'он',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', 'него', 'ним', 'нём'],
+    explanation: '4格，动词 видеть 要求宾格',
+    case: 4,
+    gender: '单数'
+  },
+  {
+    id: 4,
+    text: 'Мы гордимся она.',
+    targetWord: 'она',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'неё', 'ней', 'нею'],
+    explanation: '5格，动词 гордиться 要求工具格',
+    case: 5,
+    gender: '单数'
+  },
+  {
+    id: 5,
+    text: 'Расскажи мне о оно.',
+    targetWord: 'оно',
+    originalEnding: '',
+    correctEnding: 'нём',
+    possibleEndings: ['нём', 'него', 'ним', 'нём'],
+    explanation: '6格，介词 о 要求前置格，第三人称代词后加 н-',
+    case: 6,
+    gender: '单数'
+  },
+  {
+    id: 6,
+    text: 'У ты нет времени?',
+    targetWord: 'ты',
+    originalEnding: '',
+    correctEnding: 'тебя',
+    possibleEndings: ['тебя', 'тебе', 'тобой', 'тобою'],
+    explanation: '2格，介词 у 要求属格',
+    case: 2,
+    gender: '单数'
+  },
+  {
+    id: 7,
+    text: 'Я дал она книгу.',
+    targetWord: 'она',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'неё', 'ней', 'нею'],
+    explanation: '3格，动词 дать 要求与格',
+    case: 3,
+    gender: '单数'
+  },
+  {
+    id: 8,
+    text: 'Она пригласила я на день рождения.',
+    targetWord: 'я',
+    originalEnding: '',
+    correctEnding: 'меня',
+    possibleEndings: ['меня', 'мне', 'мной', 'мною'],
+    explanation: '4格，动词 пригласить 要求宾格',
+    case: 4,
+    gender: '单数'
+  },
+  {
+    id: 9,
+    text: 'Он интересуется ты.',
+    targetWord: 'ты',
+    originalEnding: '',
+    correctEnding: 'тобой',
+    possibleEndings: ['тобой', 'тебя', 'тебе', 'тобою'],
+    explanation: '5格，动词 интересоваться 要求工具格',
+    case: 5,
+    gender: '单数'
+  },
+  {
+    id: 10,
+    text: 'Я думаю о он часто.',
+    targetWord: 'он',
+    originalEnding: '',
+    correctEnding: 'нём',
+    possibleEndings: ['нём', 'него', 'ним', 'нём'],
+    explanation: '6格，介词 о 要求前置格，第三人称代词后加 н-',
+    case: 6,
+    gender: '单数'
+  },
+  {
+    id: 11,
+    text: 'Без я они не справятся.',
+    targetWord: 'я',
+    originalEnding: '',
+    correctEnding: 'меня',
+    possibleEndings: ['меня', 'мне', 'мной', 'мною'],
+    explanation: '2格，介词 без 要求属格',
+    case: 2,
+    gender: '单数'
+  },
+  {
+    id: 12,
+    text: 'Напиши ты письмо.',
+    targetWord: 'ты',
+    originalEnding: '',
+    correctEnding: 'тебе',
+    possibleEndings: ['тебе', 'тебя', 'тобой', 'тобою'],
+    explanation: '3格，动词 написать 要求与格',
+    case: 3,
+    gender: '单数'
+  },
+  {
+    id: 13,
+    text: 'Я люблю она.',
+    targetWord: 'она',
+    originalEnding: '',
+    correctEnding: 'её',
+    possibleEndings: ['её', 'неё', 'ей', 'ней'],
+    explanation: '4格，动词 любить 要求宾格',
+    case: 4,
+    gender: '单数'
+  },
+  {
+    id: 14,
+    text: 'Мы встретились с он в парке.',
+    targetWord: 'он',
+    originalEnding: '',
+    correctEnding: 'ним',
+    possibleEndings: ['ним', 'него', 'его', 'нём'],
+    explanation: '5格，介词 с 要求工具格，第三人称代词后加 н-',
+    case: 5,
+    gender: '单数'
+  },
+
+  {
+    id: 16,
+    text: 'У она красивые глаза.',
+    targetWord: 'она',
+    originalEnding: '',
+    correctEnding: 'неё',
+    possibleEndings: ['неё', 'ей', 'её', 'ней'],
+    explanation: '2格，介词 у 要求属格，第三人称代词后加 н-',
+    case: 2,
+    gender: '单数'
+  },
+  {
+    id: 17,
+    text: 'Подойди к он и поздоровайся.',
+    targetWord: 'он',
+    originalEnding: '',
+    correctEnding: 'нему',
+    possibleEndings: ['нему', 'него', 'его', 'ним'],
+    explanation: '3格，介词 к 要求与格，第三人称代词后加 н-',
+    case: 3,
+    gender: '单数'
+  },
+  {
+    id: 18,
+    text: 'Я не понимаю ты.',
+    targetWord: 'ты',
+    originalEnding: '',
+    correctEnding: 'тебя',
+    possibleEndings: ['тебя', 'тебе', 'тобой', 'тобою'],
+    explanation: '4格，动词 понимать 要求宾格',
+    case: 4,
+    gender: '单数'
+  },
+  {
+    id: 19,
+    text: 'Он работает вместе со я.',
+    targetWord: 'я',
+    originalEnding: '',
+    correctEnding: 'мной',
+    possibleEndings: ['мной', 'меня', 'мне', 'мною'],
+    explanation: '5格，介词 с 要求工具格（实际连用时常为 со мной）',
+    case: 5,
+    gender: '单数'
+  },
+  {
+    id: 20,
+    text: 'Что ты думаешь обо я?',
+    targetWord: 'я',
+    originalEnding: '',
+    correctEnding: 'мне',
+    possibleEndings: ['мне', 'меня', 'мной', 'мною'],
+    explanation: '6格，介词 о 要求前置格（实际连用时常为 обо мне）',
+    case: 6,
+    gender: '单数'
+  },
+  {
+    id: 21,
+    text: 'У он нет ключей.',
+    targetWord: 'он',
+    originalEnding: '',
+    correctEnding: 'него',
+    possibleEndings: ['него', 'нему', 'его', 'ним'],
+    explanation: '2格，介词 у 要求属格，第三人称代词后加 н-',
+    case: 2,
+    gender: '单数'
+  },
+  {
+    id: 22,
+    text: 'Помоги она с переводом.',
+    targetWord: 'она',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'неё', 'её', 'ней'],
+    explanation: '3格，动词 помочь 要求与格',
+    case: 3,
+    gender: '单数'
+  },
+  {
+    id: 23,
+    text: 'Я встретил ты на улице.',
+    targetWord: 'ты',
+    originalEnding: '',
+    correctEnding: 'тебя',
+    possibleEndings: ['тебя', 'тебе', 'тобой', 'тобою'],
+    explanation: '4格，动词 встретить 要求宾格',
+    case: 4,
+    gender: '单数'
+  },
+  {
+    id: 24,
+    text: 'Я подошёл к оно.',
+    targetWord: 'оно',
+    originalEnding: '',
+    correctEnding: 'нему',
+    possibleEndings: ['нему', 'него', 'его', 'ним'],
+    explanation: '3格，介词 к 要求与格，第三人称代词后加 н-',
+    case: 3,
+    gender: '单数'
+  },
+  {
+    id: 25,
+    text: 'В она есть что-то особенное.',
+    targetWord: 'она',
+    originalEnding: '',
+    correctEnding: 'ней',
+    possibleEndings: ['ней', 'неё', 'ей', 'её'],
+    explanation: '6格，介词 в 要求前置格，第三人称代词后加 н-',
+    case: 6,
+    gender: '单数'
+  },
+  {
+    id: 26,
+    text: 'У ты хороший вкус.',
+    targetWord: 'ты',
+    originalEnding: '',
+    correctEnding: 'тебя',
+    possibleEndings: ['тебя', 'тебе', 'тобой', 'тобою'],
+    explanation: '2格，介词 у 要求属格',
+    case: 2,
+    gender: '单数'
+  },
+  {
+    id: 27,
+    text: 'Он доволен оно.',
+    targetWord: 'оно',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'него', 'нему', 'нём'],
+    explanation: '5格，短尾形容词 доволен 要求工具格',
+    case: 5,
+    gender: '单数'
+  },
+  {
+    id: 28,
+    text: 'Мы ждём он уже полчаса.',
+    targetWord: 'он',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', 'него', 'нему', 'ним'],
+    explanation: '4格，动词 ждать 要求宾格',
+    case: 4,
+    gender: '单数'
+  },
+  {
+    id: 29,
+    text: 'У оно нет цвета.',
+    targetWord: 'оно',
+    originalEnding: '',
+    correctEnding: 'него',
+    possibleEndings: ['него', 'нему', 'его', 'ним'],
+    explanation: '2格，介词 у 要求属格，第三人称代词后加 н-',
+    case: 2,
+    gender: '单数'
+  },
+  {
+    id: 30,
+    text: 'Мы вспоминали о он.',
+    targetWord: 'он',
+    originalEnding: '',
+    correctEnding: 'нём',
+    possibleEndings: ['нём', 'него', 'нему', 'ним'],
+    explanation: '6格，介词 о 要求前置格，第三人称代词后加 н-',
+    case: 6,
+    gender: '单数'
+  },
+  {
+    id: 31,
+    text: 'У она нет брата?',
+    targetWord: 'она',
+    originalEnding: '',
+    correctEnding: 'неё',
+    possibleEndings: ['неё', 'ей', 'её', 'ней'],
+    explanation: '2格，介词 у 要求属格，第三人称代词后加 н-',
+    case: 2,
+    gender: '单数'
+  },
+  {
+    id: 32,
+    text: 'Я иду к он завтра.',
+    targetWord: 'он',
+    originalEnding: '',
+    correctEnding: 'нему',
+    possibleEndings: ['нему', 'него', 'его', 'ним'],
+    explanation: '3格，介词 к 要求与格，第三人称代词后加 н-',
+    case: 3,
+    gender: '单数'
+  },
+  {
+    id: 33,
+    text: 'Ты видишь я сейчас?',
+    targetWord: 'я',
+    originalEnding: '',
+    correctEnding: 'меня',
+    possibleEndings: ['меня', 'мне', 'мной', 'мною'],
+    explanation: '4格，动词 видеть 要求宾格',
+    case: 4,
+    gender: '单数'
+  },
+  {
+    id: 34,
+    text: 'Она занимается с ты спортом.',
+    targetWord: 'ты',
+    originalEnding: '',
+    correctEnding: 'тобой',
+    possibleEndings: ['тобой', 'тебя', 'тебе', 'тобою'],
+    explanation: '5格，介词 с 要求工具格',
+    case: 5,
+    gender: '单数'
+  },
+  {
+    id: 35,
+    text: 'В ты я уверен.',
+    targetWord: 'ты',
+    originalEnding: '',
+    correctEnding: 'тебе',
+    possibleEndings: ['тебе', 'тебя', 'тобой', 'тобою'],
+    explanation: '6格，介词 в 要求前置格',
+    case: 6,
+    gender: '单数'
+  },
+  {
+    id: 36,
+    text: 'У он есть сестра.',
+    targetWord: 'он',
+    originalEnding: '',
+    correctEnding: 'него',
+    possibleEndings: ['него', 'нему', 'его', 'ним'],
+    explanation: '2格，介词 у 要求属格，第三人称代词后加 н-',
+    case: 2,
+    gender: '单数'
+  },
+  {
+    id: 37,
+    text: 'Позвони она вечером.',
+    targetWord: 'она',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'неё', 'её', 'ней'],
+    explanation: '3格，动词 позвонить 要求与格',
+    case: 3,
+    gender: '单数'
+  },
+  {
+    id: 38,
+    text: 'Я не слышу ты.',
+    targetWord: 'ты',
+    originalEnding: '',
+    correctEnding: 'тебя',
+    possibleEndings: ['тебя', 'тебе', 'тобой', 'тобою'],
+    explanation: '4格，动词 слышать 要求宾格',
+    case: 4,
+    gender: '单数'
+  },
+  {
+    id: 39,
+    text: 'Я вижу оно.',
+    targetWord: 'оно',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', 'него', 'нему', 'ним'],
+    explanation: '4格，动词 видеть 要求宾格（оно 的宾格同 он）',
+    case: 4,
+    gender: '单数'
+  },
+  {
+    id: 40,
+    text: 'О оно никто не знает.',
+    targetWord: 'оно',
+    originalEnding: '',
+    correctEnding: 'нём',
+    possibleEndings: ['нём', 'него', 'нему', 'ним'],
+    explanation: '6格，介词 о 要求前置格，第三人称代词后加 н-',
+    case: 6,
+    gender: '单数'
+  },
+  // 复数人称训练题目
+  {
+    id: 41,
+    text: 'У мы есть вопросы.',
+    targetWord: 'мы',
+    originalEnding: '',
+    correctEnding: 'нас',
+    possibleEndings: ['нас', 'нам', 'нами'],
+    explanation: '2格，前置词у要求第二格，мы的第二格是нас。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 42,
+    text: 'Он старше мы.',
+    targetWord: 'мы',
+    originalEnding: '',
+    correctEnding: 'нас',
+    possibleEndings: ['нас', 'нам', 'нами'],
+    explanation: '2格，比较级后名词用第二格，мы的第二格是нас。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 43,
+    text: 'У вы нет машины?',
+    targetWord: 'вы',
+    originalEnding: '',
+    correctEnding: 'вас',
+    possibleEndings: ['вас', 'вам', 'вами'],
+    explanation: '2格，前置词у要求第二格，вы的第二格是вас。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 44,
+    text: 'Для вы это задание слишком сложное.',
+    targetWord: 'вы',
+    originalEnding: '',
+    correctEnding: 'вас',
+    possibleEndings: ['вас', 'вам', 'вами'],
+    explanation: '2格，前置词для要求第二格，вы的第二格是вас。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 45,
+    text: 'У они сегодня экзамен.',
+    targetWord: 'они',
+    originalEnding: '',
+    correctEnding: 'них',
+    possibleEndings: ['них', 'ним', 'ими'],
+    explanation: '2格，前置词у要求第二格，они的第二格是их，但у后需加н，故为них。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 46,
+    text: 'Вместо они пришли другие люди.',
+    targetWord: 'они',
+    originalEnding: '',
+    correctEnding: 'них',
+    possibleEndings: ['них', 'ним', 'ими'],
+    explanation: '2格，前置词вместо要求第二格，они的第二格是их，但вместo后需加н，故为них。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 47,
+    text: 'Мы ждём ответа от они.',
+    targetWord: 'они',
+    originalEnding: '',
+    correctEnding: 'них',
+    possibleEndings: ['них', 'ним', 'ими'],
+    explanation: '2格，前置词от要求第二格，они的第二格是их，但от后需加н，故为них。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 48,
+    text: 'Позвоните мы вечером.',
+    targetWord: 'мы',
+    originalEnding: '',
+    correctEnding: 'нам',
+    possibleEndings: ['нам', 'нас', 'нами'],
+    explanation: '3格，动词позвонить要求第三格，мы的第三格是нам。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 49,
+    text: 'К мы пришли гости.',
+    targetWord: 'мы',
+    originalEnding: '',
+    correctEnding: 'нам',
+    possibleEndings: ['нам', 'нас', 'нами'],
+    explanation: '3格，前置词к要求第三格，мы的第三格是нам。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 50,
+    text: 'Я напишу вы письмо.',
+    targetWord: 'вы',
+    originalEnding: '',
+    correctEnding: 'вам',
+    possibleEndings: ['вам', 'вас', 'вами'],
+    explanation: '3格，动词написать要求第三格，вы的第三格是вам。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 51,
+    text: 'Благодаря вы мы справились.',
+    targetWord: 'вы',
+    originalEnding: '',
+    correctEnding: 'вам',
+    possibleEndings: ['вам', 'вас', 'вами'],
+    explanation: '3格，前置词благодаря要求第三格，вы的第三格是вам。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 52,
+    text: 'Расскажи они правду.',
+    targetWord: 'они',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'них', 'ими'],
+    explanation: '3格，动词рассказать要求第三格，они的第三格是им。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 53,
+    text: 'Мы подошли к они.',
+    targetWord: 'они',
+    originalEnding: '',
+    correctEnding: 'ним',
+    possibleEndings: ['ним', 'них', 'ими'],
+    explanation: '3格，前置词к要求第三格，они的第三格是им，但к后需加н，故为ним。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 54,
+    text: 'Они пригласили мы на вечеринку.',
+    targetWord: 'мы',
+    originalEnding: '',
+    correctEnding: 'нас',
+    possibleEndings: ['нас', 'нам', 'нами'],
+    explanation: '4格，动词пригласить要求第四格，мы的第四格是нас。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 55,
+    text: 'Ты узнаёшь мы на фото?',
+    targetWord: 'мы',
+    originalEnding: '',
+    correctEnding: 'нас',
+    possibleEndings: ['нас', 'нам', 'нами'],
+    explanation: '4格，动词узнавать要求第四格，мы的第四格是нас。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 56,
+    text: 'Я люблю вы.',
+    targetWord: 'вы',
+    originalEnding: '',
+    correctEnding: 'вас',
+    possibleEndings: ['вас', 'вам', 'вами'],
+    explanation: '4格，动词любить要求第四格，вы的第四格是вас。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 57,
+    text: 'Директор вызвал вы в кабинет.',
+    targetWord: 'вы',
+    originalEnding: '',
+    correctEnding: 'вас',
+    possibleEndings: ['вас', 'вам', 'вами'],
+    explanation: '4格，动词вызвать要求第四格，вы的第四格是вас。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 58,
+    text: 'Мы встретили они в парке.',
+    targetWord: 'они',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'них', 'ими'],
+    explanation: '4格，动词встретить要求第四格，они的第四格是их。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 59,
+    text: 'Мы рассчитываем на они.',
+    targetWord: 'они',
+    originalEnding: '',
+    correctEnding: 'них',
+    possibleEndings: ['них', 'ним', 'ими'],
+    explanation: '4格，动词рассчитывать要求на+第四格，они的第四格是их，但на后需加н，故为них。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 60,
+    text: 'Они довольны мы.',
+    targetWord: 'мы',
+    originalEnding: '',
+    correctEnding: 'нами',
+    possibleEndings: ['нами', 'нас', 'нам'],
+    explanation: '5格，形容词довольны要求第五格，мы的第五格是нами。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 61,
+    text: 'Пойдёшь с мы в кино?',
+    targetWord: 'мы',
+    originalEnding: '',
+    correctEnding: 'нами',
+    possibleEndings: ['нами', 'нас', 'нам'],
+    explanation: '5格，前置词с要求第五格，мы的第五格是нами。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 62,
+    text: 'Я восхищаюсь вы.',
+    targetWord: 'вы',
+    originalEnding: '',
+    correctEnding: 'вами',
+    possibleEndings: ['вами', 'вас', 'вам'],
+    explanation: '5格，动词восхищаться要求第五格，вы的第五格是вами。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 63,
+    text: 'Между вы и нами нет секретов.',
+    targetWord: 'вы',
+    originalEnding: '',
+    correctEnding: 'вами',
+    possibleEndings: ['вами', 'вас', 'вам'],
+    explanation: '5格，前置词между要求第五格，вы的第五格是вами。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 64,
+    text: 'Мы гордимся они.',
+    targetWord: 'они',
+    originalEnding: '',
+    correctEnding: 'ими',
+    possibleEndings: ['ими', 'них', 'ним'],
+    explanation: '5格，动词гордиться要求第五格，они的第五格是ими。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 65,
+    text: 'С они всегда весело.',
+    targetWord: 'они',
+    originalEnding: '',
+    correctEnding: 'ними',
+    possibleEndings: ['ними', 'них', 'ним'],
+    explanation: '5格，前置词с要求第五格，они的第五格是ими，但с后需加н，故为ними。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 66,
+    text: 'Они вспоминают о мы.',
+    targetWord: 'мы',
+    originalEnding: '',
+    correctEnding: 'нас',
+    possibleEndings: ['нас', 'нам', 'нами'],
+    explanation: '6格，前置词о要求第六格，мы的第六格是нас。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 67,
+    text: 'При мы всегда есть телефон.',
+    targetWord: 'мы',
+    originalEnding: '',
+    correctEnding: 'нас',
+    possibleEndings: ['нас', 'нам', 'нами'],
+    explanation: '6格，前置词при要求第六格，мы的第六格是нас。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 68,
+    text: 'Мы говорили о вы вчера.',
+    targetWord: 'вы',
+    originalEnding: '',
+    correctEnding: 'вас',
+    possibleEndings: ['вас', 'вам', 'вами'],
+    explanation: '6格，前置词о要求第六格，вы的第六格是вас。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 69,
+    text: 'Я часто думаю о они.',
+    targetWord: 'они',
+    originalEnding: '',
+    correctEnding: 'них',
+    possibleEndings: ['них', 'ним', 'ими'],
+    explanation: '6格，前置词о要求第六格，они的第六格是них。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 70,
+    text: 'На они была надета новая форма.',
+    targetWord: 'они',
+    originalEnding: '',
+    correctEnding: 'них',
+    possibleEndings: ['них', 'ним', 'ими'],
+    explanation: '6格，前置词на要求第六格，они的第六格是них。',
+    case: 6,
+    gender: '复数'
+  }
+])
+
+// 形容词+名词组合训练题目数据
+const adjNounCombinedSentences = ref<Array<{
+  id: number
+  text: string
+  targetWord: string
+  correctAnswer: string
+  explanation: string
+  case: number
+  number: string
+}>>([
+  {
+    id: 1,
+    text: 'Вчера я купил хорошая книга в подарок другу.',
+    targetWord: 'хорошая книга',
+    correctAnswer: 'хорошую книгу',
+    explanation: '动词 купить 要求第四格。',
+    case: 4,
+    number: '单数'
+  },
+  {
+    id: 2,
+    text: 'Дети радуются белый снег зимой.',
+    targetWord: 'белый снег',
+    correctAnswer: 'белому снегу',
+    explanation: '动词 радоваться 要求第三格。',
+    case: 3,
+    number: '单数'
+  },
+  {
+    id: 3,
+    text: 'Мы любовались красивый город вечером.',
+    targetWord: 'красивый город',
+    correctAnswer: 'красивым городом',
+    explanation: '动词 любоваться 要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 4,
+    text: 'На столе не было свежий хлеб.',
+    targetWord: 'свежий хлеб',
+    correctAnswer: 'свежего хлеба',
+    explanation: '否定结构"не было"要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 5,
+    text: 'Они встретились у старый парк.',
+    targetWord: 'старый парк',
+    correctAnswer: 'старого парка',
+    explanation: '前置词 у 要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 6,
+    text: 'Мама сварила компот из спелое яблоко.',
+    targetWord: 'спелое яблоко',
+    correctAnswer: 'спелого яблока',
+    explanation: '前置词 из 要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 7,
+    text: 'Студенты говорили о новый фильм.',
+    targetWord: 'новый фильм',
+    correctAnswer: 'новых фильмах',
+    explanation: '前置词 о 要求第六格，复数。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 8,
+    text: 'В зоопарке дети видели интересное животное.',
+    targetWord: 'интересное животное',
+    correctAnswer: 'интересных животных',
+    explanation: '动词 видели 要求第四格，动物名词复数第四格同第二格。',
+    case: 4,
+    number: '复数'
+  },
+  {
+    id: 9,
+    text: 'Для маленький ребенок эта игра не подходит.',
+    targetWord: 'маленький ребенок',
+    correctAnswer: 'маленьких детей',
+    explanation: '前置词 для 要求第二格，复数。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 10,
+    text: 'Экскурсовод рассказывал о старинное здание.',
+    targetWord: 'старинное здание',
+    correctAnswer: 'старинных зданиях',
+    explanation: '前置词 о 要求第六格，复数。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 11,
+    text: 'Я мечтаю о большая квартира в центре.',
+    targetWord: 'большая квартира',
+    correctAnswer: 'большой квартире',
+    explanation: '动词 мечтать о 要求第六格。',
+    case: 6,
+    number: '单数'
+  },
+  {
+    id: 12,
+    text: 'Спортсмены гордились золотая медаль.',
+    targetWord: 'золотая медаль',
+    correctAnswer: 'золотыми медалями',
+    explanation: '动词 гордились 要求第五格，复数。',
+    case: 5,
+    number: '复数'
+  },
+  {
+    id: 13,
+    text: 'В библиотеке нет учебника по русский язык.',
+    targetWord: 'русский язык',
+    correctAnswer: 'русскому языку',
+    explanation: '前置词 по 表示学科时要求第三格。',
+    case: 3,
+    number: '单数'
+  },
+  {
+    id: 14,
+    text: 'Мы шли по широкая улица.',
+    targetWord: 'широкая улица',
+    correctAnswer: 'широкой улице',
+    explanation: '前置词 по 表示"沿着"时要求第三格。',
+    case: 3,
+    number: '单数'
+  },
+  {
+    id: 15,
+    text: 'Художник рисовал портрет молодая женщина.',
+    targetWord: 'молодая женщина',
+    correctAnswer: 'молодой женщины',
+    explanation: '名词 портрет 后接第二格表示对象。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 16,
+    text: 'Кошка играла с маленький мяч.',
+    targetWord: 'маленький мяч',
+    correctAnswer: 'маленьким мячом',
+    explanation: '前置词 с 表示工具时要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 17,
+    text: 'В тексте были ошибки в длинное предложение.',
+    targetWord: 'длинное предложение',
+    correctAnswer: 'длинных предложениях',
+    explanation: '前置词 в 表示范围时要求第六格，复数。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 18,
+    text: 'Друзья купили билеты на интересный спектакль.',
+    targetWord: 'интересный спектакль',
+    correctAnswer: 'интересный спектакль',
+    explanation: '前置词 на 表示方向时要求第四格。',
+    case: 4,
+    number: '单数'
+  },
+  {
+    id: 19,
+    text: 'На выставке показаны работы известный художник.',
+    targetWord: 'известный художник',
+    correctAnswer: 'известных художников',
+    explanation: '名词 работы 后接第二格表示所属，复数。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 20,
+    text: 'Пассажиры ждали скорый поезд.',
+    targetWord: 'скорый поезд',
+    correctAnswer: 'скорого поезда',
+    explanation: '动词 ждали 要求第二格（表示期望的事物）。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 21,
+    text: 'Мы говорили о летние каникулы.',
+    targetWord: 'летние каникулы',
+    correctAnswer: 'летних каникулах',
+    explanation: '前置词 о 要求第六格，复数。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 22,
+    text: 'Врач выписал лекарство от сильный кашель.',
+    targetWord: 'сильный кашель',
+    correctAnswer: 'сильного кашля',
+    explanation: '前置词 от 表示原因时要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 23,
+    text: 'Девочка угостила подругу вкусная конфета.',
+    targetWord: 'вкусная конфета',
+    correctAnswer: 'вкусной конфетой',
+    explanation: '动词 угостила 要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 24,
+    text: 'В статье писали о важная проблема.',
+    targetWord: 'важная проблема',
+    correctAnswer: 'важных проблемах',
+    explanation: '前置词 о 要求第六格，复数。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 25,
+    text: 'Студенты сдали экзамен по трудный предмет.',
+    targetWord: 'трудный предмет',
+    correctAnswer: 'трудному предмету',
+    explanation: '前置词 по 表示学科时要求第三格。',
+    case: 3,
+    number: '单数'
+  },
+  {
+    id: 26,
+    text: 'Рыбаки вернулись с хороший улов.',
+    targetWord: 'хороший улов',
+    correctAnswer: 'хорошим уловом',
+    explanation: '前置词 с 表示伴随时要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 27,
+    text: 'Для горячий чай нужен сахар.',
+    targetWord: 'горячий чай',
+    correctAnswer: 'горячего чая',
+    explanation: '前置词 для 表示用途时要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 28,
+    text: 'Туристы смотрели на красивый закат.',
+    targetWord: 'красивый закат',
+    correctAnswer: 'красивый закат',
+    explanation: '动词 смотрели на 要求第四格。',
+    case: 4,
+    number: '单数'
+  },
+  {
+    id: 29,
+    text: 'В музее есть картины великий художник.',
+    targetWord: 'великий художник',
+    correctAnswer: 'великих художников',
+    explanation: '名词 картины 后接第二格表示作者，复数。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 30,
+    text: 'Ребёнок боится громкий звук.',
+    targetWord: 'громкий звук',
+    correctAnswer: 'громких звуков',
+    explanation: '动词 боится 要求第二格，复数。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 31,
+    text: 'Комнату украсили воздушный шар.',
+    targetWord: 'воздушный шар',
+    correctAnswer: 'воздушными шарами',
+    explanation: '动词 украсили 表示用某物装饰时要求第五格，复数。',
+    case: 5,
+    number: '复数'
+  },
+  {
+    id: 32,
+    text: 'В расписании нет изменений в вечернее занятие.',
+    targetWord: 'вечернее занятие',
+    correctAnswer: 'вечерних занятиях',
+    explanation: '前置词 в 表示范围时要求第六格，复数。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 33,
+    text: 'Я потерял ключ от входная дверь.',
+    targetWord: 'входная дверь',
+    correctAnswer: 'входной двери',
+    explanation: '前置词 от 表示来源时要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 34,
+    text: 'Они остановились у горная река.',
+    targetWord: 'горная река',
+    correctAnswer: 'горной реки',
+    explanation: '前置词 у 要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 35,
+    text: 'Бабушка испекла пирог с яблочное варенье.',
+    targetWord: 'яблочное варенье',
+    correctAnswer: 'яблочным вареньем',
+    explanation: '前置词 с 表示内容时要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 36,
+    text: 'На собрании наградили лучший работник.',
+    targetWord: 'лучший работник',
+    correctAnswer: 'лучших работников',
+    explanation: '动词 наградили 要求第四格，动物名词复数第四格同第二格。',
+    case: 4,
+    number: '复数'
+  },
+  {
+    id: 37,
+    text: 'В саду посадили красивый цветок.',
+    targetWord: 'красивый цветок',
+    correctAnswer: 'красивые цветы',
+    explanation: '动词 посадили 要求第四格，非动物名词复数第四格同第一格。',
+    case: 4,
+    number: '复数'
+  },
+  {
+    id: 38,
+    text: 'Фильм снят по роману известный писатель.',
+    targetWord: 'известный писатель',
+    correctAnswer: 'известного писателя',
+    explanation: '名词 роману 后接第二格表示作者（по роману известного писателя）。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 39,
+    text: 'Собака бежала за почтовая машина.',
+    targetWord: 'почтовая машина',
+    correctAnswer: 'почтовой машиной',
+    explanation: '前置词 за 表示"跟随"时要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 40,
+    text: 'Ученики писали сочинение по прочитанный рассказ.',
+    targetWord: 'прочитанный рассказ',
+    correctAnswer: 'прочитанным рассказам',
+    explanation: '前置词 по 表示依据时要求第三格，复数。',
+    case: 3,
+    number: '复数'
+  },
+  {
+    id: 41,
+    text: 'Мы готовились к трудный экзамен.',
+    targetWord: 'трудный экзамен',
+    correctAnswer: 'трудному экзамену',
+    explanation: '前置词 к 表示准备时要求第三格。',
+    case: 3,
+    number: '单数'
+  },
+  {
+    id: 42,
+    text: 'В корзине лежало много спелая груша.',
+    targetWord: 'спелая груша',
+    correctAnswer: 'спелых груш',
+    explanation: 'много 后接名词复数第二格。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 43,
+    text: 'Друзья обменялись электронное письмо.',
+    targetWord: 'электронное письмо',
+    correctAnswer: 'электронными письмами',
+    explanation: '动词 обменялись 要求第五格，复数。',
+    case: 5,
+    number: '复数'
+  },
+  {
+    id: 44,
+    text: 'На уроке говорили о простое число.',
+    targetWord: 'простое число',
+    correctAnswer: 'простых числах',
+    explanation: '前置词 о 要求第六格，复数。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 45,
+    text: 'Я горжусь старший брат.',
+    targetWord: 'старший брат',
+    correctAnswer: 'старшим братом',
+    explanation: '动词 горжусь 要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 46,
+    text: 'В магазине большой выбор зимнее пальто.',
+    targetWord: 'зимнее пальто',
+    correctAnswer: 'зимних пальто',
+    explanation: '名词 выбор 后接第二格，复数，пальто 不变格。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 47,
+    text: 'Дети бежали по мокрая земля после дождя.',
+    targetWord: 'мокрая земля',
+    correctAnswer: 'мокрой земле',
+    explanation: '前置词 по 表示表面移动时要求第三格。',
+    case: 3,
+    number: '单数'
+  },
+  {
+    id: 48,
+    text: 'В книге описана жизнь деревенский учитель.',
+    targetWord: 'деревенский учитель',
+    correctAnswer: 'деревенского учителя',
+    explanation: '名词 жизнь 后接第二格表示"谁的生活"。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 49,
+    text: 'Мы смотрели на полёт быстрая птица.',
+    targetWord: 'быстрая птица',
+    correctAnswer: 'быстрых птиц',
+    explanation: '名词 полёт 后接第二格表示主体，复数。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 50,
+    text: 'К праздничный стол подали торт.',
+    targetWord: 'праздничный стол',
+    correctAnswer: 'праздничному столу',
+    explanation: '前置词 к 表示方向时要求第三格。',
+    case: 3,
+    number: '单数'
+  }
+])
+
+// 物主代词+名词组合训练题目数据
+const possNounCombinedSentences = ref<Array<{
+  id: number
+  text: string
+  targetWord: string
+  correctAnswer: string
+  explanation: string
+  case: number
+  number: string
+}>>([
+  {
+    id: 1,
+    text: 'Вчера я купил мой книга в подарок другу.',
+    targetWord: 'мой книга',
+    correctAnswer: 'мою книгу',
+    explanation: '动词 купил 要求第四格。',
+    case: 4,
+    number: '单数'
+  },
+  {
+    id: 2,
+    text: 'Дети радуются наш снег зимой.',
+    targetWord: 'наш снег',
+    correctAnswer: 'нашему снегу',
+    explanation: '动词 радуются 要求第三格。',
+    case: 3,
+    number: '单数'
+  },
+  {
+    id: 3,
+    text: 'Мы любовались твой город вечером.',
+    targetWord: 'твой город',
+    correctAnswer: 'твоим городом',
+    explanation: '动词 любовались 要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 4,
+    text: 'На столе не было свой хлеб.',
+    targetWord: 'свой хлеб',
+    correctAnswer: 'своего хлеба',
+    explanation: '否定结构"не было"要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 5,
+    text: 'Они встретились у его парк.',
+    targetWord: 'его парк',
+    correctAnswer: 'его парка',
+    explanation: '前置词 у 要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 6,
+    text: 'Мама сварила компот из её яблоко.',
+    targetWord: 'её яблоко',
+    correctAnswer: 'её яблока',
+    explanation: '前置词 из 要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 7,
+    text: 'Студенты говорили о их фильм.',
+    targetWord: 'их фильм',
+    correctAnswer: 'их фильмах',
+    explanation: '前置词 о 要求第六格，复数。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 8,
+    text: 'В зоопарке дети видели наш животное.',
+    targetWord: 'наш животное',
+    correctAnswer: 'наших животных',
+    explanation: '动词 видели 要求第四格，动物名词复数第四格同第二格。',
+    case: 4,
+    number: '复数'
+  },
+  {
+    id: 9,
+    text: 'Для твой ребенок эта игра не подходит.',
+    targetWord: 'твой ребенок',
+    correctAnswer: 'твоего ребёнка',
+    explanation: '前置词 для 要求第二格，单数。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 10,
+    text: 'Экскурсовод рассказывал о его здание.',
+    targetWord: 'его здание',
+    correctAnswer: 'его зданиях',
+    explanation: '前置词 о 要求第六格，复数。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 11,
+    text: 'Я мечтаю о свой квартира в центре.',
+    targetWord: 'свой квартира',
+    correctAnswer: 'своей квартире',
+    explanation: '动词 мечтаю о 要求第六格。',
+    case: 6,
+    number: '单数'
+  },
+  {
+    id: 12,
+    text: 'Спортсмены гордились мой медаль.',
+    targetWord: 'мой медаль',
+    correctAnswer: 'моими медалями',
+    explanation: '动词 гордились 要求第五格，复数。',
+    case: 5,
+    number: '复数'
+  },
+  {
+    id: 13,
+    text: 'В библиотеке нет учебника по ваш язык.',
+    targetWord: 'ваш язык',
+    correctAnswer: 'вашему языку',
+    explanation: '前置词 по 表示学科时要求第三格。',
+    case: 3,
+    number: '单数'
+  },
+  {
+    id: 14,
+    text: 'Мы шли по её улица.',
+    targetWord: 'её улица',
+    correctAnswer: 'её улице',
+    explanation: '前置词 по 表示"沿着"时要求第三格。',
+    case: 3,
+    number: '单数'
+  },
+  {
+    id: 15,
+    text: 'Художник рисовал портрет наш женщина.',
+    targetWord: 'наш женщина',
+    correctAnswer: 'нашей женщины',
+    explanation: '名词 портрет 后接第二格表示对象。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 16,
+    text: 'Кошка играла с твой мяч.',
+    targetWord: 'твой мяч',
+    correctAnswer: 'твоим мячом',
+    explanation: '前置词 с 表示工具时要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 17,
+    text: 'В тексте были ошибки в свой предложение.',
+    targetWord: 'свой предложение',
+    correctAnswer: 'своих предложениях',
+    explanation: '前置词 в 表示范围时要求第六格，复数。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 18,
+    text: 'Друзья купили билеты на его спектакль.',
+    targetWord: 'его спектакль',
+    correctAnswer: 'его спектакль',
+    explanation: '前置词 на 表示方向时要求第四格。',
+    case: 4,
+    number: '单数'
+  },
+  {
+    id: 19,
+    text: 'На выставке показаны работы их художник.',
+    targetWord: 'их художник',
+    correctAnswer: 'их художников',
+    explanation: '名词 работы 后接第二格表示所属，复数。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 20,
+    text: 'Пассажиры ждали ваш поезд.',
+    targetWord: 'ваш поезд',
+    correctAnswer: 'ваш поезд',
+    explanation: '动词 ждали 要求第四格（此处指特定火车，用第四格）。',
+    case: 4,
+    number: '单数'
+  },
+  {
+    id: 21,
+    text: 'Мы говорили о наш каникулы.',
+    targetWord: 'наш каникулы',
+    correctAnswer: 'наших каникулах',
+    explanation: '前置词 о 要求第六格，复数（каникулы 仅有复数形式）。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 22,
+    text: 'Врач выписал лекарство от твой кашель.',
+    targetWord: 'твой кашель',
+    correctAnswer: 'твоего кашля',
+    explanation: '前置词 от 表示原因时要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 23,
+    text: 'Девочка угостила подругу мой конфета.',
+    targetWord: 'мой конфета',
+    correctAnswer: 'моей конфетой',
+    explanation: '动词 угостила 要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 24,
+    text: 'В статье писали о её проблема.',
+    targetWord: 'её проблема',
+    correctAnswer: 'её проблемах',
+    explanation: '前置词 о 要求第六格，复数。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 25,
+    text: 'Студенты сдали экзамен по свой предмет.',
+    targetWord: 'свой предмет',
+    correctAnswer: 'своему предмету',
+    explanation: '前置词 по 表示学科时要求第三格。',
+    case: 3,
+    number: '单数'
+  },
+  {
+    id: 26,
+    text: 'Рыбаки вернулись с их улов.',
+    targetWord: 'их улов',
+    correctAnswer: 'их уловом',
+    explanation: '前置词 с 表示伴随时要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 27,
+    text: 'Для ваш чай нужен сахар.',
+    targetWord: 'ваш чай',
+    correctAnswer: 'вашего чая',
+    explanation: '前置词 для 表示用途时要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 28,
+    text: 'Туристы смотрели на наш закат.',
+    targetWord: 'наш закат',
+    correctAnswer: 'наш закат',
+    explanation: '动词 смотрели на 要求第四格。',
+    case: 4,
+    number: '单数'
+  },
+  {
+    id: 29,
+    text: 'В музее есть картины его художник.',
+    targetWord: 'его художник',
+    correctAnswer: 'его художников',
+    explanation: '名词 картины 后接第二格表示作者，复数。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 30,
+    text: 'Ребёнок боится твой звук.',
+    targetWord: 'твой звук',
+    correctAnswer: 'твоих звуков',
+    explanation: '动词 боится 要求第二格，复数。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 31,
+    text: 'Комнату украсили мой шар.',
+    targetWord: 'мой шар',
+    correctAnswer: 'моими шарами',
+    explanation: '动词 украсили 表示用某物装饰时要求第五格，复数。',
+    case: 5,
+    number: '复数'
+  },
+  {
+    id: 32,
+    text: 'В расписании нет изменений в её занятие.',
+    targetWord: 'её занятие',
+    correctAnswer: 'её занятиях',
+    explanation: '前置词 в 表示范围时要求第六格，复数。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 33,
+    text: 'Я потерял ключ от свой дверь.',
+    targetWord: 'свой дверь',
+    correctAnswer: 'своей двери',
+    explanation: '前置词 от 表示来源时要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 34,
+    text: 'Они остановились у ваш река.',
+    targetWord: 'ваш река',
+    correctAnswer: 'вашей реки',
+    explanation: '前置词 у 要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 35,
+    text: 'Бабушка испекла пирог с наш варенье.',
+    targetWord: 'наш варенье',
+    correctAnswer: 'нашим вареньем',
+    explanation: '前置词 с 表示内容时要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 36,
+    text: 'На собрании наградили их работник.',
+    targetWord: 'их работник',
+    correctAnswer: 'их работников',
+    explanation: '动词 наградили 要求第四格，动物名词复数第四格同第二格。',
+    case: 4,
+    number: '复数'
+  },
+  {
+    id: 37,
+    text: 'В саду посадили его цветок.',
+    targetWord: 'его цветок',
+    correctAnswer: 'его цветы',
+    explanation: '动词 посадили 要求第四格，非动物名词复数第四格同第一格。',
+    case: 4,
+    number: '复数'
+  },
+  {
+    id: 38,
+    text: 'Фильм снят по роману твой писатель.',
+    targetWord: 'твой писатель',
+    correctAnswer: 'твоего писателя',
+    explanation: '名词 роману 后接第二格表示作者（по роману твоего писателя）。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 39,
+    text: 'Собака бежала за мой машина.',
+    targetWord: 'мой машина',
+    correctAnswer: 'моей машиной',
+    explanation: '前置词 за 表示"跟随"时要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 40,
+    text: 'Ученики писали сочинение по свой рассказ.',
+    targetWord: 'свой рассказ',
+    correctAnswer: 'своим рассказам',
+    explanation: '前置词 по 表示依据时要求第三格，复数。',
+    case: 3,
+    number: '复数'
+  },
+  {
+    id: 41,
+    text: 'Мы готовились к ваш экзамен.',
+    targetWord: 'ваш экзамен',
+    correctAnswer: 'вашему экзамену',
+    explanation: '前置词 к 表示准备时要求第三格。',
+    case: 3,
+    number: '单数'
+  },
+  {
+    id: 42,
+    text: 'В корзине лежало много её груша.',
+    targetWord: 'её груша',
+    correctAnswer: 'её груш',
+    explanation: 'много 后接名词复数第二格。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 43,
+    text: 'Друзья обменялись наш письмо.',
+    targetWord: 'наш письмо',
+    correctAnswer: 'нашими письмами',
+    explanation: '动词 обменялись 要求第五格，复数。',
+    case: 5,
+    number: '复数'
+  },
+  {
+    id: 44,
+    text: 'На уроке говорили о твой число.',
+    targetWord: 'твой число',
+    correctAnswer: 'твоих числах',
+    explanation: '前置词 о 要求第六格，复数。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 45,
+    text: 'Я горжусь свой брат.',
+    targetWord: 'свой брат',
+    correctAnswer: 'своим братом',
+    explanation: '动词 горжусь 要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 46,
+    text: 'В магазине большой выбор его пальто.',
+    targetWord: 'его пальто',
+    correctAnswer: 'его пальто',
+    explanation: '名词 выбор 后接第二格，复数，但 пальто 不变格。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 47,
+    text: 'Дети бежали по мой земля после дождя.',
+    targetWord: 'мой земля',
+    correctAnswer: 'моей земле',
+    explanation: '前置词 по 表示表面移动时要求第三格。',
+    case: 3,
+    number: '单数'
+  },
+  {
+    id: 48,
+    text: 'В книге описана жизнь наш учитель.',
+    targetWord: 'наш учитель',
+    correctAnswer: 'нашего учителя',
+    explanation: '名词 жизнь 后接第二格表示"谁的生活"。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 49,
+    text: 'Мы смотрели на полёт её птица.',
+    targetWord: 'её птица',
+    correctAnswer: 'её птиц',
+    explanation: '名词 полёт 后接第二格表示主体，复数。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 50,
+    text: 'К ваш стол подали торт.',
+    targetWord: 'ваш стол',
+    correctAnswer: 'вашему столу',
+    explanation: '前置词 к 表示方向时要求第三格。',
+    case: 3,
+    number: '单数'
+  }
+])
+
+// 物主代词训练题目数据
+const possessiveTrainingSentences = ref<Array<{
+  id: number
+  text: string
+  targetWord: string
+  originalEnding: string
+  correctEnding: string
+  possibleEndings: string[]
+  explanation: string
+  case: number
+  gender: string
+}>>([
+  // мой (12题)
+  {
+    id: 1,
+    text: 'Это мой дом.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '1格阳性，修饰阳性名词дом，词尾无变化。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 2,
+    text: 'Это моё окно.',
+    targetWord: 'моё',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '1格中性，词尾 -ё。',
+    case: 1,
+    gender: '中性'
+  },
+  {
+    id: 3,
+    text: 'У меня нет мой брата.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', '/', 'ему', 'им'],
+    explanation: '2格，修饰阳性名词брата，词尾 -его。',
+    case: 2,
+    gender: '阳性'
+  },
+  {
+    id: 4,
+    text: 'У него нет моё времени.',
+    targetWord: 'моё',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', '/', 'ему', 'им'],
+    explanation: '2格，修饰中性名词времени，词尾 -его（阳中同形）。',
+    case: 2,
+    gender: '中性'
+  },
+  {
+    id: 5,
+    text: 'Я иду к мой другу.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'ему',
+    possibleEndings: ['ему', 'его', '/', 'им'],
+    explanation: '3格，修饰阳性名词другу，词尾 -ему。',
+    case: 3,
+    gender: '阳性'
+  },
+  {
+    id: 6,
+    text: 'Мы подошли к моё зданию.',
+    targetWord: 'моё',
+    originalEnding: '',
+    correctEnding: 'ему',
+    possibleEndings: ['ему', 'его', '/', 'им'],
+    explanation: '3格，修饰中性名词зданию，词尾 -ему（阳中同形）。',
+    case: 3,
+    gender: '中性'
+  },
+  {
+    id: 7,
+    text: 'Я вижу мой стол.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '4格阳性非动物，同1格，词尾无变化。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 8,
+    text: 'Я встретил мой брата.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', '/', 'ему', 'им'],
+    explanation: '4格阳性动物，同2格，词尾 -его。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 9,
+    text: 'Она взяла моё пальто.',
+    targetWord: 'моё',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '4格中性，同1格，词尾 -ё。',
+    case: 4,
+    gender: '中性'
+  },
+  {
+    id: 10,
+    text: 'Я горжусь мой домом.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'его', 'ему', '/'],
+    explanation: '5格，修饰阳性名词домом，词尾 -им。',
+    case: 5,
+    gender: '阳性'
+  },
+  {
+    id: 11,
+    text: 'Мы гордимся моё достижением.',
+    targetWord: 'моё',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'его', 'ему', '/'],
+    explanation: '5格，修饰中性名词достижением，词尾 -им（阳中同形）。',
+    case: 5,
+    gender: '中性'
+  },
+  {
+    id: 12,
+    text: 'Я думаю о мой доме.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'ём',
+    possibleEndings: ['ём', 'его', 'ему', 'им'],
+    explanation: '6格，修饰阳性名词доме，词尾 -ём。',
+    case: 6,
+    gender: '阳性'
+  },
+  // твой (12题)
+  {
+    id: 13,
+    text: 'Это твой учебник.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '1格阳性，词尾无变化。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 14,
+    text: 'Это твоё письмо.',
+    targetWord: 'твоё',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '1格中性，词尾 -ё。',
+    case: 1,
+    gender: '中性'
+  },
+  {
+    id: 15,
+    text: 'У нас нет твой адреса.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', '/', 'ему', 'им'],
+    explanation: '2格，修饰阳性名词адреса，词尾 -его。',
+    case: 2,
+    gender: '阳性'
+  },
+  {
+    id: 16,
+    text: 'У неё нет твоё мнения.',
+    targetWord: 'твоё',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', '/', 'ему', 'им'],
+    explanation: '2格，修饰中性名词мнения，词尾 -его（阳中同形）。',
+    case: 2,
+    gender: '中性'
+  },
+  {
+    id: 17,
+    text: 'Я иду к твой дому.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'ему',
+    possibleEndings: ['ему', 'его', '/', 'им'],
+    explanation: '3格，修饰阳性名词дому，词尾 -ему。',
+    case: 3,
+    gender: '阳性'
+  },
+  {
+    id: 18,
+    text: 'Мы приблизились к твоё озеру.',
+    targetWord: 'твоё',
+    originalEnding: '',
+    correctEnding: 'ему',
+    possibleEndings: ['ему', 'его', '/', 'им'],
+    explanation: '3格，修饰中性名词озеру，词尾 -ему（阳中同形）。',
+    case: 3,
+    gender: '中性'
+  },
+  {
+    id: 19,
+    text: 'Я купил твой компьютер.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '4格阳性非动物，同1格。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 20,
+    text: 'Он ждёт твой друга.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', '/', 'ему', 'им'],
+    explanation: '4格阳性动物，同2格，词尾 -его。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 21,
+    text: 'Мы увидели твоё море.',
+    targetWord: 'твоё',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '4格中性，同1格，词尾 -ё。',
+    case: 4,
+    gender: '中性'
+  },
+  {
+    id: 22,
+    text: 'Я интересуюсь твой вопросом.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'его', 'ему', '/'],
+    explanation: '5格，修饰阳性名词вопросом，词尾 -им。',
+    case: 5,
+    gender: '阳性'
+  },
+  {
+    id: 23,
+    text: 'Она довольна твоё решением.',
+    targetWord: 'твоё',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'его', 'ему', '/'],
+    explanation: '5格，修饰中性名词решением，词尾 -им（阳中同形）。',
+    case: 5,
+    gender: '中性'
+  },
+  {
+    id: 24,
+    text: 'Мы говорили о твой успехе.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'ём',
+    possibleEndings: ['ём', 'его', 'ему', 'им'],
+    explanation: '6格，修饰阳性名词успехе，词尾 -ём。',
+    case: 6,
+    gender: '阳性'
+  },
+  // наш (12题)
+  {
+    id: 25,
+    text: 'Это наш город.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '1格阳性，词尾无变化。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 26,
+    text: 'Это наше здание.',
+    targetWord: 'наше',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '1格中性，词尾 -е。',
+    case: 1,
+    gender: '中性'
+  },
+  {
+    id: 27,
+    text: 'У нас нет наш учителя.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', '/', 'ему', 'им'],
+    explanation: '2格，修饰阳性名词учителя，词尾 -его。',
+    case: 2,
+    gender: '阳性'
+  },
+  {
+    id: 28,
+    text: 'У них нет наше времени.',
+    targetWord: 'наше',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', '/', 'ему', 'им'],
+    explanation: '2格，修饰中性名词времени，词尾 -его（阳中同形）。',
+    case: 2,
+    gender: '中性'
+  },
+  {
+    id: 29,
+    text: 'Мы подошли к наш дому.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'ему',
+    possibleEndings: ['ему', 'его', '/', 'им'],
+    explanation: '3格，修饰阳性名词дому，词尾 -ему。',
+    case: 3,
+    gender: '阳性'
+  },
+  {
+    id: 30,
+    text: 'Дети бегут к наше морю.',
+    targetWord: 'наше',
+    originalEnding: '',
+    correctEnding: 'ему',
+    possibleEndings: ['ему', 'его', '/', 'им'],
+    explanation: '3格，修饰中性名词морю，词尾 -ему（阳中同形）。',
+    case: 3,
+    gender: '中性'
+  },
+  {
+    id: 31,
+    text: 'Я люблю наш парк.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '4格阳性非动物，同1格。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 32,
+    text: 'Мы пригласили наш соседа.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', '/', 'ему', 'им'],
+    explanation: '4格阳性动物，同2格，词尾 -его。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 33,
+    text: 'Они видят наше озеро.',
+    targetWord: 'наше',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '4格中性，同1格，词尾 -е。',
+    case: 4,
+    gender: '中性'
+  },
+  {
+    id: 34,
+    text: 'Мы гордимся наш университетом.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'его', 'ему', '/'],
+    explanation: '5格，修饰阳性名词университетом，词尾 -им。',
+    case: 5,
+    gender: '阳性'
+  },
+  {
+    id: 35,
+    text: 'Мы любуемся наше морем.',
+    targetWord: 'наше',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'его', 'ему', '/'],
+    explanation: '5格，修饰中性名词морем，词尾 -им（阳中同形）。',
+    case: 5,
+    gender: '中性'
+  },
+  {
+    id: 36,
+    text: 'Мы говорили о наш городе.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'ем',
+    possibleEndings: ['ем', 'его', 'ему', 'им'],
+    explanation: '6格，修饰阳性名词городе，词尾 -ем。',
+    case: 6,
+    gender: '阳性'
+  },
+  // ваш (12题)
+  {
+    id: 37,
+    text: 'Это ваш билет.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '1格阳性，词尾无变化。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 38,
+    text: 'Это ваше место.',
+    targetWord: 'ваше',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '1格中性，词尾 -е。',
+    case: 1,
+    gender: '中性'
+  },
+  {
+    id: 39,
+    text: 'У меня нет ваш ключа.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', '/', 'ему', 'им'],
+    explanation: '2格，修饰阳性名词ключа，词尾 -его。',
+    case: 2,
+    gender: '阳性'
+  },
+  {
+    id: 40,
+    text: 'У него нет ваше согласия.',
+    targetWord: 'ваше',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', '/', 'ему', 'им'],
+    explanation: '2格，修饰中性名词согласия，词尾 -его（阳中同形）。',
+    case: 2,
+    gender: '中性'
+  },
+  {
+    id: 41,
+    text: 'Я пойду к ваш дому.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'ему',
+    possibleEndings: ['ему', 'его', '/', 'им'],
+    explanation: '3格，修饰阳性名词дому，词尾 -ему。',
+    case: 3,
+    gender: '阳性'
+  },
+  {
+    id: 42,
+    text: 'Мы едем к ваше озеру.',
+    targetWord: 'ваше',
+    originalEnding: '',
+    correctEnding: 'ему',
+    possibleEndings: ['ему', 'его', '/', 'им'],
+    explanation: '3格，修饰中性名词озеру，词尾 -ему（阳中同形）。',
+    case: 3,
+    gender: '中性'
+  },
+  {
+    id: 43,
+    text: 'Я возьму ваш словарь.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '4格阳性非动物，同1格。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 44,
+    text: 'Я жду ваш брата.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', '/', 'ему', 'им'],
+    explanation: '4格阳性动物，同2格，词尾 -его。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 45,
+    text: 'Мы увидели ваше поле.',
+    targetWord: 'ваше',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '4格中性，同1格，词尾 -е。',
+    case: 4,
+    gender: '中性'
+  },
+  {
+    id: 46,
+    text: 'Я доволен ваш ответом.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'его', 'ему', '/'],
+    explanation: '5格，修饰阳性名词ответом，词尾 -им。',
+    case: 5,
+    gender: '阳性'
+  },
+  {
+    id: 47,
+    text: 'Он интересуется ваше предложением.',
+    targetWord: 'ваше',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'его', 'ему', '/'],
+    explanation: '5格，修饰中性名词предложением，词尾 -им（阳中同形）。',
+    case: 5,
+    gender: '中性'
+  },
+  {
+    id: 48,
+    text: 'Мы думаем о ваш предложении.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'ем',
+    possibleEndings: ['ем', 'его', 'ему', 'им'],
+    explanation: '6格，修饰阳性名词предложении，词尾 -ем。',
+    case: 6,
+    gender: '阳性'
+  },
+  // свой (4题)
+  {
+    id: 49,
+    text: 'У меня есть свой дом.',
+    targetWord: 'свой',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '1格阳性，词尾无变化。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 50,
+    text: 'У него есть своё дело.',
+    targetWord: 'своё',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '1格中性，词尾 -ё。',
+    case: 1,
+    gender: '中性'
+  },
+  {
+    id: 51,
+    text: 'У меня нет свой брата.',
+    targetWord: 'свой',
+    originalEnding: '',
+    correctEnding: 'его',
+    possibleEndings: ['его', '/', 'ему', 'им'],
+    explanation: '2格，修饰阳性名词брата，词尾 -его。',
+    case: 2,
+    gender: '阳性'
+  },
+  {
+    id: 52,
+    text: 'Я люблю свой город.',
+    targetWord: 'свой',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '4格阳性非动物，同1格（常见格）。',
+    case: 4,
+    gender: '阳性'
+  },
+  // весь (4题)
+  {
+    id: 53,
+    text: 'Весь мир знает это.',
+    targetWord: 'Весь',
+    originalEnding: '',
+    correctEnding: 'весь',
+    possibleEndings: ['весь', 'всего', 'вему', 'вем'],
+    explanation: '1格阳性，词尾无变化。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 54,
+    text: 'Всё время прошло.',
+    targetWord: 'Всё',
+    originalEnding: '',
+    correctEnding: 'всё',
+    possibleEndings: ['всё', 'всего', 'вему', 'вем'],
+    explanation: '1格中性，词尾 -ё。',
+    case: 1,
+    gender: '中性'
+  },
+  {
+    id: 55,
+    text: 'Я вижу весь город.',
+    targetWord: 'весь',
+    originalEnding: '',
+    correctEnding: 'весь',
+    possibleEndings: ['весь', 'всего', 'вему', 'вем'],
+    explanation: '4格阳性非动物，同1格（常见格）。',
+    case: 4,
+    gender: '阳性'
+  },
+  {
+    id: 56,
+    text: 'Он доволен весь миром.',
+    targetWord: 'весь',
+    originalEnding: '',
+    correctEnding: 'всем',
+    possibleEndings: ['всем', 'весь', 'всего', 'вему'],
+    explanation: '5格，修饰阳性名词миром，词尾 -ем（常见格）。',
+    case: 5,
+    gender: '阳性'
+  },
+  // чей (4题)
+  {
+    id: 57,
+    text: 'Чей это дом?',
+    targetWord: 'Чей',
+    originalEnding: '',
+    correctEnding: 'чей',
+    possibleEndings: ['чей', 'чьего', 'чему', 'чьём'],
+    explanation: '1格阳性，词尾无变化。',
+    case: 1,
+    gender: '阳性'
+  },
+  {
+    id: 58,
+    text: 'Чьё это окно?',
+    targetWord: 'Чьё',
+    originalEnding: '',
+    correctEnding: 'чьё',
+    possibleEndings: ['чьё', 'чьего', 'чему', 'чьём'],
+    explanation: '1格中性，词尾 -ё。',
+    case: 1,
+    gender: '中性'
+  },
+  {
+    id: 59,
+    text: 'У тебя нет чей адреса?',
+    targetWord: 'чей',
+    originalEnding: '',
+    correctEnding: 'чьего',
+    possibleEndings: ['чьего', 'чей', 'чему', 'чьём'],
+    explanation: '2格，修饰阳性名词адреса，词尾 -его（常见格）。',
+    case: 2,
+    gender: '阳性'
+  },
+  {
+    id: 60,
+    text: 'Я вижу чей стол?',
+    targetWord: 'чей',
+    originalEnding: '',
+    correctEnding: 'чей',
+    possibleEndings: ['чей', 'чьего', 'чему', 'чьём'],
+    explanation: '4格阳性非动物，同1格（常见格）。',
+    case: 4,
+    gender: '阳性'
+  },
+  // 补充题 (5题)
+  {
+    id: 61,
+    text: 'Мы видим наше поле.',
+    targetWord: 'наше',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '4格中性，同1格，词尾 -е。',
+    case: 4,
+    gender: '中性'
+  },
+  {
+    id: 62,
+    text: 'Она взяла своё кольцо.',
+    targetWord: 'своё',
+    originalEnding: '',
+    correctEnding: '/',
+    possibleEndings: ['/', 'его', 'ему', 'им'],
+    explanation: '4格中性，同1格，词尾 -ё。',
+    case: 4,
+    gender: '中性'
+  },
+  {
+    id: 63,
+    text: 'Он гордится свой успехом.',
+    targetWord: 'свой',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', '/', 'его', 'ему'],
+    explanation: '5格，修饰阳性名词успехом，词尾 -им。',
+    case: 5,
+    gender: '阳性'
+  },
+  {
+    id: 64,
+    text: 'О чей доме ты говоришь?',
+    targetWord: 'чей',
+    originalEnding: '',
+    correctEnding: 'чьём',
+    possibleEndings: ['чьём', 'чей', 'чьего', 'чему'],
+    explanation: '6格，修饰阳性名词доме，词尾 -ём。',
+    case: 6,
+    gender: '阳性'
+  },
+  {
+    id: 65,
+    text: 'Я встретил весь человека.',
+    targetWord: 'весь',
+    originalEnding: '',
+    correctEnding: 'всего',
+    possibleEndings: ['всего', 'весь', 'вему', 'вем'],
+    explanation: '4格阳性动物，同2格，词尾 -его（修饰человека）。',
+    case: 4,
+    gender: '阳性'
+  },
+  // 阴性单数训练 - мой (12题)
+  {
+    id: 66,
+    text: 'Это мой книга.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'я',
+    possibleEndings: ['я', 'й', 'ей', 'ю'],
+    explanation: '1格，修饰阴性名词книга，词尾 -я。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 67,
+    text: 'Мой сестра пришла.',
+    targetWord: 'Мой',
+    originalEnding: '',
+    correctEnding: 'я',
+    possibleEndings: ['я', 'й', 'ей', 'ю'],
+    explanation: '1格，修饰阴性名词сестра，词尾 -я。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 68,
+    text: 'У меня нет мой книги.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '2格，修饰阴性名词книги，词尾 -ей。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 69,
+    text: 'Цвет мой розы красный.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '2格，修饰阴性名词розы，词尾 -ей。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 70,
+    text: 'Я иду к мой подруге.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '3格，修饰阴性名词подруге，词尾 -ей。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 71,
+    text: 'По мой улице ходят люди.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '3格，修饰阴性名词улице，词尾 -ей。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 72,
+    text: 'Я вижу мой машину.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'ю',
+    possibleEndings: ['ю', 'й', 'я', 'ей'],
+    explanation: '4格，修饰阴性名词машину，词尾 -ю。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 73,
+    text: 'Она любит мой сестру.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'ю',
+    possibleEndings: ['ю', 'й', 'я', 'ей'],
+    explanation: '4格，修饰阴性名词сестру，词尾 -ю。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 74,
+    text: 'Я горжусь мой работой.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '5格，修饰阴性名词работой，词尾 -ей。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 75,
+    text: 'Она довольна мой оценкой.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '5格，修饰阴性名词оценкой，词尾 -ей。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 76,
+    text: 'Мы говорили о мой книге.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '6格，修饰阴性名词книге，词尾 -ей。',
+    case: 6,
+    gender: '阴性'
+  },
+  {
+    id: 77,
+    text: 'Он думает о мой сестре.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '6格，修饰阴性名词сестре，词尾 -ей。',
+    case: 6,
+    gender: '阴性'
+  },
+  // твой (12题)
+  {
+    id: 78,
+    text: 'Это твой книга.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'я',
+    possibleEndings: ['я', 'й', 'ей', 'ю'],
+    explanation: '1格，修饰阴性名词книга，词尾 -я。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 79,
+    text: 'Твой мама здесь.',
+    targetWord: 'Твой',
+    originalEnding: '',
+    correctEnding: 'я',
+    possibleEndings: ['я', 'й', 'ей', 'ю'],
+    explanation: '1格，修饰阴性名词мама，词尾 -я。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 80,
+    text: 'У нас нет твой ручки.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '2格，修饰阴性名词ручки，词尾 -ей。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 81,
+    text: 'Цвет твой кофты яркий.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '2格，修饰阴性名词кофты，词尾 -ей。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 82,
+    text: 'Я иду к твой бабушке.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '3格，修饰阴性名词бабушке，词尾 -ей。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 83,
+    text: 'По твой улице едут машины.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '3格，修饰阴性名词улице，词尾 -ей。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 84,
+    text: 'Я взял твой тетрадь.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'ю',
+    possibleEndings: ['ю', 'й', 'я', 'ей'],
+    explanation: '4格，修饰阴性名词тетрадь，词尾 -ю。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 85,
+    text: 'Он ждёт твой подругу.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'ю',
+    possibleEndings: ['ю', 'й', 'я', 'ей'],
+    explanation: '4格，修饰阴性名词подругу，词尾 -ю。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 86,
+    text: 'Я интересуюсь твой идеей.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '5格，修饰阴性名词идеей，词尾 -ей。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 87,
+    text: 'Она любуется твой картиной.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '5格，修饰阴性名词картиной，词尾 -ей。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 88,
+    text: 'Мы говорили о твой работе.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '6格，修饰阴性名词работе，词尾 -ей。',
+    case: 6,
+    gender: '阴性'
+  },
+  {
+    id: 89,
+    text: 'Он думает о твой семье.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '6格，修饰阴性名词семье，词尾 -ей。',
+    case: 6,
+    gender: '阴性'
+  },
+  // наш (12题)
+  {
+    id: 90,
+    text: 'Это наш школа.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'а',
+    possibleEndings: ['а', 'ш', 'ей', 'у'],
+    explanation: '1格，修饰阴性名词школа，词尾 -а。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 91,
+    text: 'Наш комната большая.',
+    targetWord: 'Наш',
+    originalEnding: '',
+    correctEnding: 'а',
+    possibleEndings: ['а', 'ш', 'ей', 'у'],
+    explanation: '1格，修饰阴性名词комната，词尾 -а。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 92,
+    text: 'У нас нет наш учительницы.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '2格，修饰阴性名词учительницы，词尾 -ей。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 93,
+    text: 'Адрес наш квартиры известен.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '2格，修饰阴性名词квартиры，词尾 -ей。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 94,
+    text: 'Мы идём к наш бабушке.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '3格，修饰阴性名词бабушке，词尾 -ей。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 95,
+    text: 'По наш улице ходит автобус.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '3格，修饰阴性名词улице，词尾 -ей。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 96,
+    text: 'Я люблю наш родину.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'у',
+    possibleEndings: ['у', 'ш', 'а', 'ей'],
+    explanation: '4格，修饰阴性名词родину，词尾 -у。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 97,
+    text: 'Мы пригласили наш соседку.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'у',
+    possibleEndings: ['у', 'ш', 'а', 'ей'],
+    explanation: '4格，修饰阴性名词соседку，词尾 -у。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 98,
+    text: 'Мы гордимся наш победой.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '5格，修饰阴性名词победой，词尾 -ей。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 99,
+    text: 'Она довольна наш работой.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '5格，修饰阴性名词работой，词尾 -ей。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 100,
+    text: 'Мы говорили о наш поездке.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '6格，修饰阴性名词поездке，词尾 -ей。',
+    case: 6,
+    gender: '阴性'
+  },
+  {
+    id: 101,
+    text: 'Он думает о наш семье.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '6格，修饰阴性名词семье，词尾 -ей。',
+    case: 6,
+    gender: '阴性'
+  },
+  // ваш (12题)
+  {
+    id: 102,
+    text: 'Это ваш книга.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'а',
+    possibleEndings: ['а', 'ш', 'ей', 'у'],
+    explanation: '1格，修饰阴性名词книга，词尾 -а。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 103,
+    text: 'Ваш дача красивая.',
+    targetWord: 'Ваш',
+    originalEnding: '',
+    correctEnding: 'а',
+    possibleEndings: ['а', 'ш', 'ей', 'у'],
+    explanation: '1格，修饰阴性名词дача，词尾 -а。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 104,
+    text: 'У меня нет ваш ручки.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '2格，修饰阴性名词ручки，词尾 -ей。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 105,
+    text: 'Цвет ваш машины синий.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '2格，修饰阴性名词машины，词尾 -ей。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 106,
+    text: 'Я пойду к ваш подруге.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '3格，修饰阴性名词подруге，词尾 -ей。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 107,
+    text: 'По ваш улице мы гуляли.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '3格，修饰阴性名词улице，词尾 -ей。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 108,
+    text: 'Я возьму ваш тетрадь.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'у',
+    possibleEndings: ['у', 'ш', 'а', 'ей'],
+    explanation: '4格，修饰阴性名词тетрадь，词尾 -у。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 109,
+    text: 'Мы ждём ваш сестру.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'у',
+    possibleEndings: ['у', 'ш', 'а', 'ей'],
+    explanation: '4格，修饰阴性名词сестру，词尾 -у。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 110,
+    text: 'Я доволен ваш помощью.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '5格，修饰阴性名词помощью，词尾 -ей。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 111,
+    text: 'Он интересуется ваш идеей.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '5格，修饰阴性名词идеей，词尾 -ей。',
+    case: 5,
+    gender: '阴性'
+  },
+  {
+    id: 112,
+    text: 'Мы думаем о ваш работе.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '6格，修饰阴性名词работе，词尾 -ей。',
+    case: 6,
+    gender: '阴性'
+  },
+  {
+    id: 113,
+    text: 'Они говорили о ваш семье.',
+    targetWord: 'ваш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '6格，修饰阴性名词семье，词尾 -ей。',
+    case: 6,
+    gender: '阴性'
+  },
+  // свой (4题)
+  {
+    id: 114,
+    text: 'У меня есть свой машина.',
+    targetWord: 'свой',
+    originalEnding: '',
+    correctEnding: 'я',
+    possibleEndings: ['я', 'й', 'ей', 'ю'],
+    explanation: '1格，修饰阴性名词машина，词尾 -я。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 115,
+    text: 'У него нет свой книги.',
+    targetWord: 'свой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '2格，修饰阴性名词книги，词尾 -ей。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 116,
+    text: 'Она любит свой работу.',
+    targetWord: 'свой',
+    originalEnding: '',
+    correctEnding: 'ю',
+    possibleEndings: ['ю', 'й', 'я', 'ей'],
+    explanation: '4格，修饰阴性名词работу，词尾 -ю。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 117,
+    text: 'Он гордится свой победой.',
+    targetWord: 'свой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '5格，修饰阴性名词победой，词尾 -ей。',
+    case: 5,
+    gender: '阴性'
+  },
+  // весь (4题)
+  {
+    id: 118,
+    text: 'Весь страна знает это.',
+    targetWord: 'Весь',
+    originalEnding: '',
+    correctEnding: 'Вся',
+    possibleEndings: ['Вся', 'Весь', 'Всей', 'Всю'],
+    explanation: '1格，修饰阴性名词страна，词尾 -я。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 119,
+    text: 'У меня нет весь информации.',
+    targetWord: 'весь',
+    originalEnding: '',
+    correctEnding: 'всей',
+    possibleEndings: ['всей', 'весь', 'вся', 'всю'],
+    explanation: '2格，修饰阴性名词информации，词尾 -ей。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 120,
+    text: 'Я вижу весь картину.',
+    targetWord: 'весь',
+    originalEnding: '',
+    correctEnding: 'всю',
+    possibleEndings: ['всю', 'весь', 'вся', 'всей'],
+    explanation: '4格，修饰阴性名词картину，词尾 -ю。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 121,
+    text: 'Он доволен весь жизнью.',
+    targetWord: 'весь',
+    originalEnding: '',
+    correctEnding: 'всей',
+    possibleEndings: ['всей', 'весь', 'вся', 'всю'],
+    explanation: '5格，修饰阴性名词жизнью，词尾 -ей。',
+    case: 5,
+    gender: '阴性'
+  },
+  // чей (4题)
+  {
+    id: 122,
+    text: 'Чей это книга?',
+    targetWord: 'Чей',
+    originalEnding: '',
+    correctEnding: 'Чья',
+    possibleEndings: ['Чья', 'Чей', 'Чьей', 'Чью'],
+    explanation: '1格，修饰阴性名词книга，词尾 -я。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 123,
+    text: 'У тебя нет чей ручки?',
+    targetWord: 'чей',
+    originalEnding: '',
+    correctEnding: 'чьей',
+    possibleEndings: ['чьей', 'чей', 'чья', 'чью'],
+    explanation: '2格，修饰阴性名词ручки，词尾 -ей。',
+    case: 2,
+    gender: '阴性'
+  },
+  {
+    id: 124,
+    text: 'Я вижу чей машину?',
+    targetWord: 'чей',
+    originalEnding: '',
+    correctEnding: 'чью',
+    possibleEndings: ['чью', 'чей', 'чья', 'чьей'],
+    explanation: '4格，修饰阴性名词машину，词尾 -ю。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 125,
+    text: 'О чей сестре ты говоришь?',
+    targetWord: 'чей',
+    originalEnding: '',
+    correctEnding: 'чьей',
+    possibleEndings: ['чьей', 'чей', 'чья', 'чью'],
+    explanation: '6格，修饰阴性名词сестре，词尾 -ей。',
+    case: 6,
+    gender: '阴性'
+  },
+  // 补充题 (5题)
+  {
+    id: 126,
+    text: 'Это мой старая фотография.',
+    targetWord: 'мой',
+    originalEnding: '',
+    correctEnding: 'я',
+    possibleEndings: ['я', 'й', 'ей', 'ю'],
+    explanation: '1格，修饰阴性名词фотография，词尾 -я。',
+    case: 1,
+    gender: '阴性'
+  },
+  {
+    id: 127,
+    text: 'Мы рады наш новой победе.',
+    targetWord: 'наш',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'ш', 'а', 'у'],
+    explanation: '3格，修饰阴性名词победе，词尾 -ей。',
+    case: 3,
+    gender: '阴性'
+  },
+  {
+    id: 128,
+    text: 'Он взял свой тетрадь.',
+    targetWord: 'свой',
+    originalEnding: '',
+    correctEnding: 'ю',
+    possibleEndings: ['ю', 'й', 'я', 'ей'],
+    explanation: '4格，修饰阴性名词тетрадь，词尾 -ю。',
+    case: 4,
+    gender: '阴性'
+  },
+  {
+    id: 129,
+    text: 'Я думаю о твой маме.',
+    targetWord: 'твой',
+    originalEnding: '',
+    correctEnding: 'ей',
+    possibleEndings: ['ей', 'й', 'я', 'ю'],
+    explanation: '6格，修饰阴性名词маме，词尾 -ей。',
+    case: 6,
+    gender: '阴性'
+  },
+  {
+    id: 130,
+    text: 'Весь группа собралась.',
+    targetWord: 'Весь',
+    originalEnding: '',
+    correctEnding: 'Вся',
+    possibleEndings: ['Вся', 'Весь', 'Всей', 'Всю'],
+    explanation: '1格，修饰阴性名词группа，词尾 -я。',
+    case: 1,
+    gender: '阴性'
+  },
+  // 复数训练
+  {
+    id: 131,
+    text: 'Это мои друзья.',
+    targetWord: 'мои',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '1格，复数物主代词1格词尾 -и。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 132,
+    text: 'Мои книги на столе.',
+    targetWord: 'Мои',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '1格，复数物主代词1格词尾 -и。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 133,
+    text: 'У тебя нет мои друзей.',
+    targetWord: 'мои',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '2格，复数物主代词2格词尾 -их。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 134,
+    text: 'Цена мои машин высока.',
+    targetWord: 'мои',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '2格，复数物主代词2格词尾 -их。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 135,
+    text: 'Я иду к мои друзьям.',
+    targetWord: 'мои',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'и', 'их', 'ими'],
+    explanation: '3格，复数物主代词3格词尾 -им。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 136,
+    text: 'По мои улицам ходят люди.',
+    targetWord: 'мои',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'и', 'их', 'ими'],
+    explanation: '3格，复数物主代词3格词尾 -им。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 137,
+    text: 'Я вижу мои книги.',
+    targetWord: 'мои',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '4格非动物，同1格，词尾 -и。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 138,
+    text: 'Я встретил мои друзей.',
+    targetWord: 'мои',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '4格动物，同2格，词尾 -их。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 139,
+    text: 'Я горжусь мои друзьями.',
+    targetWord: 'мои',
+    originalEnding: '',
+    correctEnding: 'ими',
+    possibleEndings: ['ими', 'и', 'их', 'им'],
+    explanation: '5格，复数物主代词5格词尾 -ими。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 140,
+    text: 'Мы любуемся мои картинами.',
+    targetWord: 'мои',
+    originalEnding: '',
+    correctEnding: 'ими',
+    possibleEndings: ['ими', 'и', 'их', 'им'],
+    explanation: '5格，复数物主代词5格词尾 -ими。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 141,
+    text: 'Мы говорили о мои книгах.',
+    targetWord: 'мои',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '6格，复数物主代词6格词尾 -их。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 142,
+    text: 'Он думает о мои друзьях.',
+    targetWord: 'мои',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '6格，复数物主代词6格词尾 -их。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 143,
+    text: 'Это твои друзья.',
+    targetWord: 'твои',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '1格，复数物主代词1格词尾 -и。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 144,
+    text: 'Твои письма пришли.',
+    targetWord: 'Твои',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '1格，复数物主代词1格词尾 -и。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 145,
+    text: 'У нас нет твои книг.',
+    targetWord: 'твои',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '2格，复数物主代词2格词尾 -их。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 146,
+    text: 'Цвет твои роз красный.',
+    targetWord: 'твои',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '2格，复数物主代词2格词尾 -их。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 147,
+    text: 'Я иду к твои друзьям.',
+    targetWord: 'твои',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'и', 'их', 'ими'],
+    explanation: '3格，复数物主代词3格词尾 -им。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 148,
+    text: 'По твои улицам едут машины.',
+    targetWord: 'твои',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'и', 'их', 'ими'],
+    explanation: '3格，复数物主代词3格词尾 -им。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 149,
+    text: 'Я взял твои книги.',
+    targetWord: 'твои',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '4格非动物，同1格，词尾 -и。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 150,
+    text: 'Он ждёт твои друзей.',
+    targetWord: 'твои',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '4格动物，同2格，词尾 -их。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 151,
+    text: 'Я интересуюсь твои идеями.',
+    targetWord: 'твои',
+    originalEnding: '',
+    correctEnding: 'ими',
+    possibleEndings: ['ими', 'и', 'их', 'им'],
+    explanation: '5格，复数物主代词5格词尾 -ими。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 152,
+    text: 'Она любуется твои картинами.',
+    targetWord: 'твои',
+    originalEnding: '',
+    correctEnding: 'ими',
+    possibleEndings: ['ими', 'и', 'их', 'им'],
+    explanation: '5格，复数物主代词5格词尾 -ими。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 153,
+    text: 'Мы говорили о твои работах.',
+    targetWord: 'твои',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '6格，复数物主代词6格词尾 -их。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 154,
+    text: 'Он думает о твои друзьях.',
+    targetWord: 'твои',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '6格，复数物主代词6格词尾 -их。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 155,
+    text: 'Это наши друзья.',
+    targetWord: 'наши',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '1格，复数物主代词1格词尾 -и。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 156,
+    text: 'Наши окна открыты.',
+    targetWord: 'Наши',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '1格，复数物主代词1格词尾 -и。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 157,
+    text: 'У нас нет наши учителей.',
+    targetWord: 'наши',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '2格，复数物主代词2格词尾 -их。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 158,
+    text: 'Адрес наши школ известен.',
+    targetWord: 'наши',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '2格，复数物主代词2格词尾 -их。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 159,
+    text: 'Мы идём к наши друзьям.',
+    targetWord: 'наши',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'и', 'их', 'ими'],
+    explanation: '3格，复数物主代词3格词尾 -им。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 160,
+    text: 'По наши улицам ходит автобус.',
+    targetWord: 'наши',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'и', 'их', 'ими'],
+    explanation: '3格，复数物主代词3格词尾 -им。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 161,
+    text: 'Я люблю наши города.',
+    targetWord: 'наши',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '4格非动物，同1格，词尾 -и。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 162,
+    text: 'Мы пригласили наши соседей.',
+    targetWord: 'наши',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '4格动物，同2格，词尾 -их。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 163,
+    text: 'Мы гордимся наши победами.',
+    targetWord: 'наши',
+    originalEnding: '',
+    correctEnding: 'ими',
+    possibleEndings: ['ими', 'и', 'их', 'им'],
+    explanation: '5格，复数物主代词5格词尾 -ими。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 164,
+    text: 'Она довольна наши работами.',
+    targetWord: 'наши',
+    originalEnding: '',
+    correctEnding: 'ими',
+    possibleEndings: ['ими', 'и', 'их', 'им'],
+    explanation: '5格，复数物主代词5格词尾 -ими。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 165,
+    text: 'Мы говорили о наши поездках.',
+    targetWord: 'наши',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '6格，复数物主代词6格词尾 -их。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 166,
+    text: 'Он думает о наши семьях.',
+    targetWord: 'наши',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '6格，复数物主代词6格词尾 -их。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 167,
+    text: 'Это ваши друзья.',
+    targetWord: 'ваши',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '1格，复数物主代词1格词尾 -и。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 168,
+    text: 'Ваши письма пришли.',
+    targetWord: 'Ваши',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '1格，复数物主代词1格词尾 -и。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 169,
+    text: 'У меня нет ваши ключей.',
+    targetWord: 'ваши',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '2格，复数物主代词2格词尾 -их。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 170,
+    text: 'Цвет ваши машин синий.',
+    targetWord: 'ваши',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '2格，复数物主代词2格词尾 -их。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 171,
+    text: 'Я пойду к ваши друзьям.',
+    targetWord: 'ваши',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'и', 'их', 'ими'],
+    explanation: '3格，复数物主代词3格词尾 -им。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 172,
+    text: 'По ваши улицам мы гуляли.',
+    targetWord: 'ваши',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'и', 'их', 'ими'],
+    explanation: '3格，复数物主代词3格词尾 -им。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 173,
+    text: 'Я возьму ваши книги.',
+    targetWord: 'ваши',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '4格非动物，同1格，词尾 -и。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 174,
+    text: 'Мы ждём ваши детей.',
+    targetWord: 'ваши',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '4格动物，同2格，词尾 -их。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 175,
+    text: 'Я доволен ваши ответами.',
+    targetWord: 'ваши',
+    originalEnding: '',
+    correctEnding: 'ими',
+    possibleEndings: ['ими', 'и', 'их', 'им'],
+    explanation: '5格，复数物主代词5格词尾 -ими。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 176,
+    text: 'Он интересуется ваши идеями.',
+    targetWord: 'ваши',
+    originalEnding: '',
+    correctEnding: 'ими',
+    possibleEndings: ['ими', 'и', 'их', 'им'],
+    explanation: '5格，复数物主代词5格词尾 -ими。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 177,
+    text: 'Мы думаем о ваши работах.',
+    targetWord: 'ваши',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '6格，复数物主代词6格词尾 -их。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 178,
+    text: 'Они говорили о ваши семьях.',
+    targetWord: 'ваши',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '6格，复数物主代词6格词尾 -их。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 179,
+    text: 'У нас есть свои друзья.',
+    targetWord: 'свои',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '1格，复数物主代词1格词尾 -и。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 180,
+    text: 'У него нет свои книг.',
+    targetWord: 'свои',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '2格，复数物主代词2格词尾 -их。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 181,
+    text: 'Она любит свои детей.',
+    targetWord: 'свои',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '4格动物，同2格，词尾 -их。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 182,
+    text: 'Он гордится свои успехами.',
+    targetWord: 'свои',
+    originalEnding: '',
+    correctEnding: 'ими',
+    possibleEndings: ['ими', 'и', 'их', 'им'],
+    explanation: '5格，复数物主代词5格词尾 -ими。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 183,
+    text: 'Все люди знают это.',
+    targetWord: 'Все',
+    originalEnding: '',
+    correctEnding: 'e',
+    possibleEndings: ['e', 'ех', 'ем', 'еми'],
+    explanation: '1格，复数物主代词1格词尾 -e。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 184,
+    text: 'У меня нет все книг.',
+    targetWord: 'все',
+    originalEnding: '',
+    correctEnding: 'ех',
+    possibleEndings: ['ех', 'e', 'ем', 'еми'],
+    explanation: '2格，复数物主代词2格词尾 -ех。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 185,
+    text: 'Я вижу все дома.',
+    targetWord: 'все',
+    originalEnding: '',
+    correctEnding: 'e',
+    possibleEndings: ['e', 'ех', 'ем', 'еми'],
+    explanation: '4格非动物，同1格，词尾 -e。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 186,
+    text: 'Он доволен все результатами.',
+    targetWord: 'все',
+    originalEnding: '',
+    correctEnding: 'еми',
+    possibleEndings: ['еми', 'e', 'ех', 'ем'],
+    explanation: '5格，复数物主代词5格词尾 -еми。',
+    case: 5,
+    gender: '复数'
+  },
+  {
+    id: 187,
+    text: 'Чьи это книги?',
+    targetWord: 'Чьи',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '1格，复数物主代词1格词尾 -и。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 188,
+    text: 'У тебя нет чьи книг?',
+    targetWord: 'чьи',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '2格，复数物主代词2格词尾 -их。',
+    case: 2,
+    gender: '复数'
+  },
+  {
+    id: 189,
+    text: 'Я вижу чьи дома?',
+    targetWord: 'чьи',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '4格非动物，同1格，词尾 -и。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 190,
+    text: 'О чьи друзьях ты говоришь?',
+    targetWord: 'чьи',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '6格，复数物主代词6格词尾 -их。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 191,
+    text: 'Это наши новые дома.',
+    targetWord: 'наши',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '1格，复数物主代词1格词尾 -и。',
+    case: 1,
+    gender: '复数'
+  },
+  {
+    id: 192,
+    text: 'Мы рады ваши успехам.',
+    targetWord: 'ваши',
+    originalEnding: '',
+    correctEnding: 'им',
+    possibleEndings: ['им', 'и', 'их', 'ими'],
+    explanation: '3格，复数物主代词3格词尾 -им。',
+    case: 3,
+    gender: '复数'
+  },
+  {
+    id: 193,
+    text: 'Он взял свои тетради.',
+    targetWord: 'свои',
+    originalEnding: '',
+    correctEnding: 'и',
+    possibleEndings: ['и', 'их', 'им', 'ими'],
+    explanation: '4格非动物，同1格，词尾 -и。',
+    case: 4,
+    gender: '复数'
+  },
+  {
+    id: 194,
+    text: 'Я думаю о твои родителях.',
+    targetWord: 'твои',
+    originalEnding: '',
+    correctEnding: 'их',
+    possibleEndings: ['их', 'и', 'им', 'ими'],
+    explanation: '6格，复数物主代词6格词尾 -их。',
+    case: 6,
+    gender: '复数'
+  },
+  {
+    id: 195,
+    text: 'Все студенты здесь.',
+    targetWord: 'Все',
+    originalEnding: '',
+    correctEnding: 'e',
+    possibleEndings: ['e', 'ех', 'ем', 'еми'],
+    explanation: '1格，复数物主代词1格词尾 -e。',
+    case: 1,
+    gender: '复数'
+  }
+])
+
+// 当前形容词训练题目
+const currentAdjectiveSentence = ref<{
+  id: number
+  text: string
+  targetWord: string
+  originalEnding: string
+  correctEnding: string
+  possibleEndings: string[]
+  explanation: string
+  case: number
+  gender: string
+} | null>(null)
+
+// 形容词训练答题状态
+const adjectiveSelectedEnding = ref<string>('')
+const adjectiveShowDropdown = ref(false)
+const adjectiveAnswerResult = ref<'correct' | 'incorrect' | null>(null)
+const adjectiveShowResult = ref(false)
+const usedAdjectiveSentences = ref<number[]>([]) // 记录已经出现过的题目ID
+
+// 形容词训练下拉菜单位置
+const adjectiveDropdownTop = ref(0)
+const adjectiveDropdownLeft = ref(0)
+
+// 物主代词训练状态（复用形容词训练的变量，但使用不同的数据源）
+const usedPossessiveSentences = ref<number[]>([]) // 记录已经出现过的物主代词题目ID
+const lastPossessiveWord = ref<string>('') // 记录上一个物主代词，用于避免连续出现
+
+// 人称代词训练状态
+const pronounTrainingState = ref('select-person') // select-person, practice
+const selectedPerson = ref<string | null>(null) // 第一人称、第二人称、第三人称
 
 // 实战训练相关状态
 type DeclensionType = 'append' | 'replace' | 'clear' | 'special'
@@ -51,6 +5648,25 @@ const selectedEnding = ref<string>('')
 const showDropdown = ref(false)
 const answerResult = ref<'correct' | 'incorrect' | null>(null)
 const showResult = ref(false)
+
+// 移动端侧边栏状态
+const mobileSidebarOpen = ref(false)
+
+// 打开移动端侧边栏
+const openMobileSidebar = () => {
+  mobileSidebarOpen.value = true
+}
+
+// 关闭移动端侧边栏
+const closeMobileSidebar = () => {
+  mobileSidebarOpen.value = false
+}
+
+// 从侧边栏导航
+const navigateToFromSidebar = (page: string) => {
+  closeMobileSidebar()
+  navigateTo(page)
+}
 const usedPracticeSentences = ref<number[]>([]) // 记录已经出现过的题目ID
 
 const fullSentenceHtml = computed(() => {
@@ -350,50 +5966,28 @@ const showTestSummary = ref(false) // 是否显示测试总结页面
 const testTimeLeft = ref(180) // 3分钟 = 180秒
 let timerInterval: ReturnType<typeof setInterval> | null = null
 
-// 题目选择状态管理
-interface QuestionSelectionState {
-  usedIndices: number[] // 当前周期内已使用的索引
-  cycleCount: number // 完成的周期数
-}
 
-let selectionState: QuestionSelectionState = {
-  usedIndices: [],
-  cycleCount: 0
-}
-
-// 从 localStorage 加载选择状态
-const loadSelectionState = () => {
-  try {
-    const saved = localStorage.getItem('testQuestionSelectionState')
-    if (saved) {
-      selectionState = JSON.parse(saved)
-    }
-  } catch (e) {
-    selectionState = { usedIndices: [], cycleCount: 0 }
-  }
-}
-
-// 保存选择状态到 localStorage
-const saveSelectionState = () => {
-  try {
-    localStorage.setItem('testQuestionSelectionState', JSON.stringify(selectionState))
-  } catch (e) {
-    console.error('Failed to save selection state', e)
-  }
-}
-
-// 重置选择状态（开始新周期）
-const resetSelectionState = () => {
-  selectionState.usedIndices = []
-  selectionState.cycleCount++
-  saveSelectionState()
-}
-
-// 初始化时加载
-loadSelectionState()
 
 // 导航到指定页面
-const navigateTo = (page: string) => {
+const navigateTo = (page: string, addToHistory: boolean = true) => {
+  // 离开变格规则页面时保存滚动位置
+  if (currentPage.value === 'declension-rules') {
+    const isDesktop = window.innerWidth >= 768
+    let scrollContainer: HTMLElement | null
+    
+    if (isDesktop) {
+      // 桌面端使用.rules-content
+      scrollContainer = document.querySelector('.rules-content') as HTMLElement
+    } else {
+      // 移动端使用.page-content
+      scrollContainer = document.querySelector('.page-content.page-full-width') as HTMLElement
+    }
+    
+    if (scrollContainer) {
+      rulesScrollPosition.value = scrollContainer.scrollTop
+    }
+  }
+  
   // 如果当前页面不是变格规则或历史记录，且导航目标是变格规则或历史记录，则保存当前页面状态
   if (currentPage.value !== 'declension-rules' && currentPage.value !== 'profile' && 
       (page === 'declension-rules' || page === 'profile')) {
@@ -433,7 +6027,40 @@ const navigateTo = (page: string) => {
     saveTestProgress()
   }
   
+  // 更新历史记录栈
+  if (addToHistory && page !== currentPage.value) {
+    // 如果不是在历史记录中间导航，则添加新记录
+    if (historyIndex.value < navigationHistory.value.length - 1) {
+      // 如果在历史记录中间，删除当前位置之后的记录
+      navigationHistory.value = navigationHistory.value.slice(0, historyIndex.value + 1)
+    }
+    navigationHistory.value.push(page)
+    historyIndex.value = navigationHistory.value.length - 1
+    // 更新浏览器历史记录
+    window.history.pushState({ page: page }, '', `#${page}`)
+  }
+  
   currentPage.value = page
+  
+  // 进入变格规则页面时恢复滚动位置
+  if (page === 'declension-rules') {
+    nextTick(() => {
+      const isDesktop = window.innerWidth >= 768
+      let scrollContainer: HTMLElement | null
+      
+      if (isDesktop) {
+        // 桌面端使用.rules-content
+        scrollContainer = document.querySelector('.rules-content') as HTMLElement
+      } else {
+        // 移动端使用.page-content
+        scrollContainer = document.querySelector('.page-content.page-full-width') as HTMLElement
+      }
+      
+      if (scrollContainer) {
+        scrollContainer.scrollTop = rulesScrollPosition.value
+      }
+    })
+  }
   
   if (page === 'case-training') {
     // 只有在从主页进入时才重置状态
@@ -442,6 +6069,25 @@ const navigateTo = (page: string) => {
       selectedCase.value = null
       resetPracticeState()
     }
+  } else if (page === 'adj-training' || page === 'poss-training') {
+    // 形容词训练或物主代词训练
+    adjPossTrainingState.value = 'select-gender'
+    selectedGender.value = null
+    currentAdjPossType.value = page === 'adj-training' ? 'adjective' : 'possessive'
+    resetPracticeState()
+  } else if (page === 'pronoun-training') {
+    // 人称代词训练
+    pronounTrainingState.value = 'select-person'
+    selectedPerson.value = null
+    resetPracticeState()
+  } else if (page === 'adj-noun-combined') {
+    // 形容词+名词组合训练
+    adjNounCombinedState.value = 'practice'
+    loadAdjNounCombinedSentence()
+  } else if (page === 'poss-noun-combined') {
+    // 物主代词+名词组合训练
+    possNounCombinedState.value = 'practice'
+    loadPossNounCombinedSentence()
   }
 }
 
@@ -505,248 +6151,155 @@ window.addEventListener('beforeunload', () => {
   }
 })
 
+// 测试题目池
+const testQuestionPool = [
+  { text: 'Вчера я купил хорошая книга в подарок другу.', targetWord: 'хорошая книга', correctAnswer: 'хорошую книгу', explanation: '动词 купить 要求第四格。', number: '单数' },
+  { text: 'Дети радуются белый снег зимой.', targetWord: 'белый снег', correctAnswer: 'белому снегу', explanation: '动词 радоваться 要求第三格。', number: '单数' },
+  { text: 'Мы любовались красивый город вечером.', targetWord: 'красивый город', correctAnswer: 'красивым городом', explanation: '动词 любоваться 要求第五格。', number: '单数' },
+  { text: 'На столе не было свежий хлеб.', targetWord: 'свежий хлеб', correctAnswer: 'свежего хлеба', explanation: '否定结构"не было"要求第二格。', number: '单数' },
+  { text: 'Они встретились у старый парк.', targetWord: 'старый парк', correctAnswer: 'старого парка', explanation: '前置词 у 要求第二格。', number: '单数' },
+  { text: 'Мама сварила компот из спелое яблоко.', targetWord: 'спелое яблоко', correctAnswer: 'спелого яблока', explanation: '前置词 из 要求第二格。', number: '单数' },
+  { text: 'Студенты говорили о новый фильм.', targetWord: 'новый фильм', correctAnswer: 'новых фильмах', explanation: '前置词 о 要求第六格，复数。', number: '复数' },
+  { text: 'В зоопарке дети видели интересное животное.', targetWord: 'интересное животное', correctAnswer: 'интересных животных', explanation: '动词 видели 要求第四格，动物名词复数第四格同第二格。', number: '复数' },
+  { text: 'Для маленький ребенок эта игра не подходит.', targetWord: 'маленький ребенок', correctAnswer: 'маленьких детей', explanation: '前置词 для 要求第二格，复数。', number: '复数' },
+  { text: 'Экскурсовод рассказывал о старинное здание.', targetWord: 'старинное здание', correctAnswer: 'старинных зданиях', explanation: '前置词 о 要求第六格，复数。', number: '复数' },
+  { text: 'Я мечтаю о большая квартира в центре.', targetWord: 'большая квартира', correctAnswer: 'большой квартире', explanation: '动词 мечтать о 要求第六格。', number: '单数' },
+  { text: 'Спортсмены гордились золотая медаль.', targetWord: 'золотая медаль', correctAnswer: 'золотыми медалями', explanation: '动词 гордились 要求第五格，复数。', number: '复数' },
+  { text: 'В библиотеке нет учебника по русский язык.', targetWord: 'русский язык', correctAnswer: 'русскому языку', explanation: '前置词 по 表示学科时要求第三格。', number: '单数' },
+  { text: 'Мы шли по широкая улица.', targetWord: 'широкая улица', correctAnswer: 'широкой улице', explanation: '前置词 по 表示"沿着"时要求第三格。', number: '单数' },
+  { text: 'Художник рисовал портрет молодая женщина.', targetWord: 'молодая женщина', correctAnswer: 'молодой женщины', explanation: '名词 портрет 后接第二格表示对象。', number: '单数' },
+  { text: 'Кошка играла с маленький мяч.', targetWord: 'маленький мяч', correctAnswer: 'маленьким мячом', explanation: '前置词 с 表示工具时要求第五格。', number: '单数' },
+  { text: 'В тексте были ошибки в длинное предложение.', targetWord: 'длинное предложение', correctAnswer: 'длинных предложениях', explanation: '前置词 в 表示范围时要求第六格，复数。', number: '复数' },
+  { text: 'Друзья купили билеты на интересный спектакль.', targetWord: 'интересный спектакль', correctAnswer: 'интересный спектакль', explanation: '前置词 на 表示方向时要求第四格。', number: '单数' },
+  { text: 'На выставке показаны работы известный художник.', targetWord: 'известный художник', correctAnswer: 'известных художников', explanation: '名词 работы 后接第二格表示所属，复数。', number: '复数' },
+  { text: 'Пассажиры ждали скорый поезд.', targetWord: 'скорый поезд', correctAnswer: 'скорого поезда', explanation: '动词 ждали 要求第二格（表示期望的事物）。', number: '单数' },
+  { text: 'Мы говорили о летние каникулы.', targetWord: 'летние каникулы', correctAnswer: 'летних каникулах', explanation: '前置词 о 要求第六格，复数。', number: '复数' },
+  { text: 'Врач выписал лекарство от сильный кашель.', targetWord: 'сильный кашель', correctAnswer: 'сильного кашля', explanation: '前置词 от 表示原因时要求第二格。', number: '单数' },
+  { text: 'Девочка угостила подругу вкусная конфета.', targetWord: 'вкусная конфета', correctAnswer: 'вкусной конфетой', explanation: '动词 угостила 要求第五格。', number: '单数' },
+  { text: 'В статье писали о важная проблема.', targetWord: 'важная проблема', correctAnswer: 'важных проблемах', explanation: '前置词 о 要求第六格，复数。', number: '复数' },
+  { text: 'Студенты сдали экзамен по трудный предмет.', targetWord: 'трудный предмет', correctAnswer: 'трудному предмету', explanation: '前置词 по 表示学科时要求第三格。', number: '单数' },
+  { text: 'Рыбаки вернулись с хороший улов.', targetWord: 'хороший улов', correctAnswer: 'хорошим уловом', explanation: '前置词 с 表示伴随时要求第五格。', number: '单数' },
+  { text: 'Для горячий чай нужен сахар.', targetWord: 'горячий чай', correctAnswer: 'горячего чая', explanation: '前置词 для 表示用途时要求第二格。', number: '单数' },
+  { text: 'Туристы смотрели на красивый закат.', targetWord: 'красивый закат', correctAnswer: 'красивый закат', explanation: '动词 смотрели на 要求第四格。', number: '单数' },
+  { text: 'В музее есть картины великий художник.', targetWord: 'великий художник', correctAnswer: 'великих художников', explanation: '名词 картины 后接第二格表示作者，复数。', number: '复数' },
+  { text: 'Ребёнок боится громкий звук.', targetWord: 'громкий звук', correctAnswer: 'громких звуков', explanation: '动词 боится 要求第二格，复数。', number: '复数' },
+  { text: 'Комнату украсили воздушный шар.', targetWord: 'воздушный шар', correctAnswer: 'воздушными шарами', explanation: '动词 украсили 表示用某物装饰时要求第五格，复数。', number: '复数' },
+  { text: 'В расписании нет изменений в вечернее занятие.', targetWord: 'вечернее занятие', correctAnswer: 'вечерних занятиях', explanation: '前置词 в 表示范围时要求第六格，复数。', number: '复数' },
+  { text: 'Я потерял ключ от входная дверь.', targetWord: 'входная дверь', correctAnswer: 'входной двери', explanation: '前置词 от 表示来源时要求第二格。', number: '单数' },
+  { text: 'Они остановились у горная река.', targetWord: 'горная река', correctAnswer: 'горной реки', explanation: '前置词 у 要求第二格。', number: '单数' },
+  { text: 'Бабушка испекла пирог с яблочное варенье.', targetWord: 'яблочное варенье', correctAnswer: 'яблочным вареньем', explanation: '前置词 с 表示内容时要求第五格。', number: '单数' },
+  { text: 'На собрании наградили лучший работник.', targetWord: 'лучший работник', correctAnswer: 'лучших работников', explanation: '动词 наградили 要求第四格，动物名词复数第四格同第二格。', number: '复数' },
+  { text: 'В саду посадили красивый цветок.', targetWord: 'красивый цветок', correctAnswer: 'красивые цветы', explanation: '动词 посадили 要求第四格，非动物名词复数第四格同第一格。', number: '复数' },
+  { text: 'Фильм снят по роману известный писатель.', targetWord: 'известный писатель', correctAnswer: 'известного писателя', explanation: '名词 роману 后接第二格表示作者（по роману известного писателя）。', number: '单数' },
+  { text: 'Собака бежала за почтовая машина.', targetWord: 'почтовая машина', correctAnswer: 'почтовой машиной', explanation: '前置词 за 表示"跟随"时要求第五格。', number: '单数' },
+  { text: 'Ученики писали сочинение по прочитанный рассказ.', targetWord: 'прочитанный рассказ', correctAnswer: 'прочитанным рассказам', explanation: '前置词 по 表示依据时要求第三格，复数。', number: '复数' },
+  { text: 'Мы готовились к трудный экзамен.', targetWord: 'трудный экзамен', correctAnswer: 'трудному экзамену', explanation: '前置词 к 表示准备时要求第三格。', number: '单数' },
+  { text: 'В корзине лежало много спелая груша.', targetWord: 'спелая груша', correctAnswer: 'спелых груш', explanation: 'много 后接名词复数第二格。', number: '复数' },
+  { text: 'Друзья обменялись электронное письмо.', targetWord: 'электронное письмо', correctAnswer: 'электронными письмами', explanation: '动词 обменялись 要求第五格，复数。', number: '复数' },
+  { text: 'На уроке говорили о геометрическая фигура.', targetWord: 'геометрическая фигура', correctAnswer: 'геометрических фигурах', explanation: '前置词 о 要求第六格，复数。', number: '复数' },
+  { text: 'Я горжусь лучший друг.', targetWord: 'лучший друг', correctAnswer: 'лучшим другом', explanation: '动词 горжусь 要求第五格。', number: '单数' },
+  { text: 'В магазине большой выбор тёплая куртка.', targetWord: 'тёплая куртка', correctAnswer: 'тёплых курток', explanation: '名词 выбор 后接第二格，复数。', number: '复数' },
+  { text: 'Дети бежали по зелёная трава после дождя.', targetWord: 'зелёная трава', correctAnswer: 'зелёной траве', explanation: '前置词 по 表示表面移动时要求第三格。', number: '单数' },
+  { text: 'В книге описана жизнь простой крестьянин.', targetWord: 'простой крестьянин', correctAnswer: 'простого крестьянина', explanation: '名词 жизнь 后接第二格表示"谁的生活"。', number: '单数' },
+  { text: 'Мы смотрели на полёт дикий гусь.', targetWord: 'дикий гусь', correctAnswer: 'диких гусей', explanation: '名词 полёт 后接第二格表示主体，复数。', number: '复数' },
+  { text: 'К новогодний ужин подали торт.', targetWord: 'новогодний ужин', correctAnswer: 'новогоднему ужину', explanation: '前置词 к 表示方向时要求第三格。', number: '单数' },
+  { text: 'Фильм снят по роману популярный автор.', targetWord: 'популярный автор', correctAnswer: 'популярного автора', explanation: '名词 роману 后接第二格表示作者（по роману популярного автора）。', number: '单数' },
+  { text: 'Собака бежала за хозяинский велосипед.', targetWord: 'хозяинский велосипед', correctAnswer: 'хозяинским велосипедом', explanation: '前置词 за 表示"跟随"时要求第五格。', number: '单数' },
+  { text: 'Ученики писали сочинение по изученное произведение.', targetWord: 'изученное произведение', correctAnswer: 'изученным произведениям', explanation: '前置词 по 表示依据时要求第三格，复数。', number: '复数' },
+  { text: 'Мы готовились к ответственный зачёт.', targetWord: 'ответственный зачёт', correctAnswer: 'ответственному зачёту', explanation: '前置词 к 表示准备时要求第三格。', number: '单数' },
+  { text: 'В корзине лежало много красный помидор.', targetWord: 'красный помидор', correctAnswer: 'красных помидоров', explanation: 'много 后接名词复数第二格。', number: '复数' },
+  { text: 'Друзья обменялись поздравительная открытка.', targetWord: 'поздравительная открытка', correctAnswer: 'поздравительными открытками', explanation: '动词 обменялись 要求第五格，复数。', number: '复数' },
+  { text: 'На уроке говорили о геометрическая фигура.', targetWord: 'геометрическая фигура', correctAnswer: 'геометрических фигурах', explanation: '前置词 о 要求第六格，复数。', number: '复数' },
+  // 新增50道物主代词+名词题目
+  { text: 'Сестра взяла мой карандаш без спроса.', targetWord: 'мой карандаш', correctAnswer: 'мой карандаш', explanation: 'взять + 4格', number: '单数' },
+  { text: 'Мы обрадовались твой подарок на день рождения.', targetWord: 'твой подарок', correctAnswer: 'твоему подарку', explanation: 'обрадоваться + 3格', number: '单数' },
+  { text: 'Он гордится наш успех в учёбе.', targetWord: 'наш успех', correctAnswer: 'нашим успехом', explanation: 'гордиться + 5格', number: '单数' },
+  { text: 'В комнате не было ваш стул, пришлось стоять.', targetWord: 'ваш стул', correctAnswer: 'вашего стула', explanation: 'не было + 2格', number: '单数' },
+  { text: 'Они подошли к свой дом после прогулки.', targetWord: 'свой дом', correctAnswer: 'своему дому', explanation: 'к + 3格', number: '单数' },
+  { text: 'Мама купила моя юбка вчера в магазине.', targetWord: 'моя юбка', correctAnswer: 'мою юбку', explanation: 'купить + 4格', number: '单数' },
+  { text: 'Дети рады твоя помощь с уроками.', targetWord: 'твоя помощь', correctAnswer: 'твоей помощи', explanation: 'рады + 3格', number: '单数' },
+  { text: 'Мы любовались наша река с высокого берега.', targetWord: 'наша река', correctAnswer: 'нашей рекой', explanation: 'любоваться + 5格', number: '单数' },
+  { text: 'Она ждала ваша машина у подъезда.', targetWord: 'ваша машина', correctAnswer: 'вашу машину', explanation: 'ждать + 4格', number: '单数' },
+  { text: 'Я думаю о своя работа каждый вечер.', targetWord: 'своя работа', correctAnswer: 'своей работе', explanation: 'думать о + 6格', number: '单数' },
+  { text: 'Друзья говорили о мой план на лето.', targetWord: 'мой план', correctAnswer: 'моих планах', explanation: 'говорить о + 6格', number: '复数' },
+  { text: 'На столе лежали твоя тетрадь по математике.', targetWord: 'твоя тетрадь', correctAnswer: 'твои тетради', explanation: '主语，1格', number: '复数' },
+  { text: 'Он интересовался наше предложение по проекту.', targetWord: 'наше предложение', correctAnswer: 'нашими предложениями', explanation: 'интересоваться + 5格', number: '复数' },
+  { text: 'Мы готовы к ваш вопрос после доклада.', targetWord: 'ваш вопрос', correctAnswer: 'вашим вопросам', explanation: 'готовы к + 3格', number: '复数' },
+  { text: 'Они заботились о свой ребёнок во время каникул.', targetWord: 'свой ребёнок', correctAnswer: 'своих детях', explanation: 'заботиться о + 6格', number: '复数' },
+  { text: 'Учитель проверил моя контрольная работа и похвалил.', targetWord: 'моя контрольная работа', correctAnswer: 'мою контрольную работу', explanation: 'проверить + 4格', number: '单数' },
+  { text: 'Мы радовались твоё здоровье после болезни.', targetWord: 'твоё здоровье', correctAnswer: 'твоему здоровью', explanation: 'радоваться + 3格', number: '单数' },
+  { text: 'Он рассказал о наше путешествие в горы.', targetWord: 'наше путешествие', correctAnswer: 'нашем путешествии', explanation: 'рассказать о + 6格', number: '单数' },
+  { text: 'Я встретился с ваш брат в кафе.', targetWord: 'ваш брат', correctAnswer: 'вашим братом', explanation: 'встретиться с + 5格', number: '单数' },
+  { text: 'Она думала о своё будущее с оптимизмом.', targetWord: 'своё будущее', correctAnswer: 'своём будущем', explanation: 'думать о + 6格', number: '单数' },
+  { text: 'В парке гуляли мой друг с собаками.', targetWord: 'мой друг', correctAnswer: 'мои друзья', explanation: '主语，1格', number: '复数' },
+  { text: 'На полке стояли твоя книга по истории.', targetWord: 'твоя книга', correctAnswer: 'твои книги', explanation: '主语，1格', number: '复数' },
+  { text: 'Это подарки для наш гость из другого города.', targetWord: 'наш гость', correctAnswer: 'наших гостей', explanation: 'для + 2格', number: '复数' },
+  { text: 'Он забыл про ваше обещание помочь нам.', targetWord: 'ваше обещание', correctAnswer: 'ваши обещания', explanation: 'забыть про + 4格', number: '复数' },
+  { text: 'Мы встретили свой знакомый в театре.', targetWord: 'свой знакомый', correctAnswer: 'своих знакомых', explanation: 'встретить + 4格（动物名词）', number: '复数' },
+  { text: 'Я купил мой телефон в прошлом месяце.', targetWord: 'мой телефон', correctAnswer: 'мой телефон', explanation: 'купить + 4格', number: '单数' },
+  { text: 'Дети радуются твой приезд к бабушке.', targetWord: 'твой приезд', correctAnswer: 'твоему приезду', explanation: 'радоваться + 3格', number: '单数' },
+  { text: 'Она восхищалась наш город ночью.', targetWord: 'наш город', correctAnswer: 'нашим городом', explanation: 'восхищаться + 5格', number: '单数' },
+  { text: 'Мы ждали ваш ответ на письмо.', targetWord: 'ваш ответ', correctAnswer: 'ваш ответ', explanation: 'ждать + 4格', number: '单数' },
+  { text: 'Он мечтал о своя машина красного цвета.', targetWord: 'своя машина', correctAnswer: 'свой машине', explanation: 'мечтать о + 6格', number: '单数' },
+  { text: 'Студенты сдали мой учебник в библиотеку после экзамена.', targetWord: 'мой учебник', correctAnswer: 'мои учебники', explanation: 'сдать + 4格', number: '复数' },
+  { text: 'Мы говорили о твой успех в спорте.', targetWord: 'твой успех', correctAnswer: 'твоих успехах', explanation: 'говорить о + 6格', number: '复数' },
+  { text: 'Он заботится о наш родитель каждый день.', targetWord: 'наш родитель', correctAnswer: 'наших родителях', explanation: 'заботиться о + 6格', number: '复数' },
+  { text: 'Они не знали про ваш план уехать.', targetWord: 'ваш план', correctAnswer: 'ваши планы', explanation: 'не знать про + 4格', number: '复数' },
+  { text: 'Мы познакомились с свой сосед на лестнице.', targetWord: 'свой сосед', correctAnswer: 'своими соседями', explanation: 'познакомиться с + 5格', number: '复数' },
+  { text: 'Сестра потеряла моя серёжка в школе.', targetWord: 'моя серёжка', correctAnswer: 'мою серёжку', explanation: 'потерять + 4格', number: '单数' },
+  { text: 'Мы обрадовались твоё письмо из далёкой страны.', targetWord: 'твоё письмо', correctAnswer: 'твоему письму', explanation: 'обрадоваться + 3格', number: '单数' },
+  { text: 'Он доволен наш результат на соревнованиях.', targetWord: 'наш результат', correctAnswer: 'нашим результатом', explanation: 'доволен + 5格', number: '单数' },
+  { text: 'Я пойду к ваш врач на приём завтра.', targetWord: 'ваш врач', correctAnswer: 'вашему врачу', explanation: 'пойти к + 3格', number: '单数' },
+  { text: 'Она мечтала о своя дача возле леса.', targetWord: 'своя дача', correctAnswer: 'свой даче', explanation: 'мечтать о + 6格', number: '单数' },
+  { text: 'На выставке представили мой рисунок акварелью.', targetWord: 'мой рисунок', correctAnswer: 'мои рисунки', explanation: 'представить + 4格', number: '复数' },
+  { text: 'Он вспоминал о твой совет в трудную минуту.', targetWord: 'твой совет', correctAnswer: 'твоих советах', explanation: 'вспоминать о + 6格', number: '复数' },
+  { text: 'Мы благодарны наш учитель за знания.', targetWord: 'наш учитель', correctAnswer: 'нашим учителям', explanation: 'благодарны + 3格', number: '复数' },
+  { text: 'Они ответили на ваше письмо электронной почтой.', targetWord: 'ваше письмо', correctAnswer: 'ваши письма', explanation: 'ответить на + 4格', number: '复数' },
+  { text: 'Мы встретились с свой родственник на вокзале.', targetWord: 'свой родственник', correctAnswer: 'своими родственниками', explanation: 'встретиться с + 5格', number: '复数' },
+  { text: 'Я взял мой рюкзак с собой в поход.', targetWord: 'мой рюкзак', correctAnswer: 'мой рюкзак', explanation: 'взять + 4格', number: '单数' },
+  { text: 'Он рад твой звонок после долгой разлуки.', targetWord: 'твой звонок', correctAnswer: 'твоему звонку', explanation: 'рад + 3格', number: '单数' },
+  { text: 'Мы гордимся наша школа и её традициями.', targetWord: 'наша школа', correctAnswer: 'нашей школой', explanation: 'гордиться + 5格', number: '单数' },
+  { text: 'Она пошла к ваша подруга за книгой.', targetWord: 'ваша подруга', correctAnswer: 'вашей подруге', explanation: 'пойти к + 3格', number: '单数' },
+  { text: 'Дети играли с своя игрушка в песочнице.', targetWord: 'своя игрушка', correctAnswer: 'своими игрушками', explanation: 'играть с + 5格', number: '复数' }
+]
+
+// 跟踪已使用的题目索引
+const usedQuestionIndices = ref<number[]>([])
+
+// Fisher-Yates 洗牌算法
+const shuffle = (array: number[]) => {
+  const arr = [...array]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const temp = arr[i]
+    arr[i] = arr[j] as number
+    arr[j] = temp as number
+  }
+  return arr
+}
+
 // 生成测试题目
 const generateTestQuestions = () => {
-  const testQuestionPool = [
-    // 1格（10题）
-    { text: 'В классе учатся студент.', targetWord: 'студент', originalEnding: '', correctEnding: 'ы', possibleEndings: ['', 'ы', 'и', 'а'], explanation: 'студент 是阳性硬干名词，复数加 -ы。' },
-    { text: 'Её брат — школьники.', targetWord: 'брат', originalEnding: '', correctEnding: 'ья', possibleEndings: ['', 'ья', 'ы', 'а'], explanation: 'брат 阳性，复数加 -ья。' },
-    { text: 'В этом доме живут сосед.', targetWord: 'сосед', originalEnding: '', correctEnding: 'и', possibleEndings: ['', 'и', 'ы', 'а'], explanation: 'сосед 阳性，复数加 -и。' },
-    { text: 'На кухне стоят стол.', targetWord: 'стол', originalEnding: '', correctEnding: 'ы', possibleEndings: ['', 'ы', 'и', 'а'], explanation: 'стол 阳性非动物，复数加 -ы。' },
-    { text: 'Новые дом построены в центре.', targetWord: 'дом', originalEnding: '', correctEnding: 'а', possibleEndings: ['', 'а', 'ы', 'и'], explanation: 'дом 阳性，复数加 -а。' },
-    { text: 'В этом доме большие окно.', targetWord: 'окно', originalEnding: 'о', correctEnding: 'а', possibleEndings: ['о', 'а', 'ы', 'и'], explanation: 'окно 中性，词尾 -о 变 -а。' },
-    { text: 'На полке стоят книга.', targetWord: 'книга', originalEnding: 'а', correctEnding: 'и', possibleEndings: ['а', 'и', 'ы', 'ов'], explanation: 'книга 阴性，词尾 -а 变 -и。' },
-    { text: 'В парке высокие дерево.', targetWord: 'дерево', originalEnding: '', correctEnding: '', possibleEndings: ['дерево', 'деревы', 'деревья', 'деревьи'], explanation: 'дерево 中性，复数 деревья（特殊变格）。', correctFullWord: 'деревья' },
-    { text: 'Мои друг любят спорт.', targetWord: 'друг', originalEnding: '', correctEnding: '', possibleEndings: ['друг', 'други', 'другие', 'друзья'], explanation: '名词 друг（阳性，动物）的复数形式为 друзья，属于特殊变格。', correctFullWord: 'друзья' },
-    { text: 'Мои сестра учатся в школе.', targetWord: 'сестра', originalEnding: '', correctEnding: '', possibleEndings: ['сестра', 'сестры', 'сестри', 'сёстры'], explanation: 'сестра 阴性，复数 сёстры（元音交替）。', correctFullWord: 'сёстры' },
-    
-    // 2格（30题）
-    { text: 'У этого стол четыре ножки.', targetWord: 'стол', originalEnding: '', correctEnding: 'а', possibleEndings: ['', 'а', 'ы', 'у'], explanation: 'стол 阳性，二格直接加 -а。' },
-    { text: 'Около этого дом растёт дерево.', targetWord: 'дом', originalEnding: '', correctEnding: 'а', possibleEndings: ['', 'а', 'ы', 'у'], explanation: 'дом 阳性，二格直接加 -а。' },
-    { text: 'Мы ждём автобус из этого город.', targetWord: 'город', originalEnding: '', correctEnding: 'а', possibleEndings: ['', 'а', 'ы', 'у'], explanation: 'город 阳性，二格直接加 -а。' },
-    { text: 'До этого год остался месяц.', targetWord: 'год', originalEnding: '', correctEnding: 'а', possibleEndings: ['', 'а', 'ы', 'у'], explanation: 'год 阳性，二格直接加 -а。' },
-    { text: 'У этого друг есть машина.', targetWord: 'друг', originalEnding: '', correctEnding: 'а', possibleEndings: ['', 'а', 'ы', 'у'], explanation: 'друг 阳性，二格直接加 -а。' },
-    { text: 'Без этого кот мы скучаем.', targetWord: 'кот', originalEnding: '', correctEnding: 'а', possibleEndings: ['', 'а', 'ы', 'у'], explanation: 'кот 阳性，二格直接加 -а。' },
-    { text: 'У этого студент хорошие оценки.', targetWord: 'студент', originalEnding: '', correctEnding: 'а', possibleEndings: ['', 'а', 'ы', 'у'], explanation: 'студент 阳性，二格直接加 -а。' },
-    { text: 'Я старше брат.', targetWord: 'брат', originalEnding: '', correctEnding: 'а', possibleEndings: ['', 'а', 'ы', 'у'], explanation: 'брат 阳性，二格直接加 -а。' },
-    { text: 'После долгого путь мы отдохнули.', targetWord: 'путь', originalEnding: 'ь', correctEnding: 'и', possibleEndings: ['ь', 'и', 'ы', 'у'], explanation: 'путь 阳性，词尾 -ь 变 -и。' },
-    { text: 'Для этого учитель это важно.', targetWord: 'учитель', originalEnding: 'ь', correctEnding: 'я', possibleEndings: ['ь', 'я', 'и', 'ы'], explanation: 'учитель 阳性，词尾 -ь 变 -я。' },
-    { text: 'В комнате много столы.', targetWord: 'столы', originalEnding: 'ы', correctEnding: 'ов', possibleEndings: ['ы', 'ов', 'ам', 'ами'], explanation: 'столы 复数，词尾 -ы 变 -ов。' },
-    { text: 'На улице много дома.', targetWord: 'дома', originalEnding: 'а', correctEnding: 'ов', possibleEndings: ['а', 'ов', 'ам', 'ами'], explanation: 'дома 复数，词尾 -а 变 -ов。' },
-    { text: 'В этой стране много города.', targetWord: 'города', originalEnding: 'а', correctEnding: 'ов', possibleEndings: ['а', 'ов', 'ам', 'ами'], explanation: 'города 复数，词尾 -а 变 -ов。' },
-    { text: 'У меня нет часы.', targetWord: 'часы', originalEnding: 'ы', correctEnding: 'ов', possibleEndings: ['ы', 'ов', 'ам', 'ами'], explanation: 'часы 复数，词尾 -ы 变 -ов。' },
-    { text: 'У нас много пути.', targetWord: 'пути', originalEnding: 'и', correctEnding: 'ей', possibleEndings: ['и', 'ей', 'ям', 'ями'], explanation: 'пути 复数，词尾 -и 变 -ей。' },
-    { text: 'В зале много люди.', targetWord: 'люди', originalEnding: 'и', correctEnding: 'ей', possibleEndings: ['и', 'ей', 'ям', 'ями'], explanation: 'люди 复数，词尾 -и 变 -ей。' },
-    { text: 'У меня много друзья.', targetWord: 'друзья', originalEnding: 'зья', correctEnding: 'зей', possibleEndings: ['зья', 'зей', 'ям', 'ями'], explanation: 'друзья 复数，词尾 -ья 变 -ей。' },
-    { text: 'У этого окно разбито стекло.', targetWord: 'окно', originalEnding: 'о', correctEnding: 'а', possibleEndings: ['о', 'а', 'у', 'ом'], explanation: 'окно 中性，词尾 -о 变 -а。' },
-    { text: 'Для этого письмо нужен конверт.', targetWord: 'письмо', originalEnding: 'о', correctEnding: 'а', possibleEndings: ['о', 'а', 'у', 'ом'], explanation: 'письмо 中性，词尾 -о 变 -а。' },
-    { text: 'У меня нет время.', targetWord: 'время', originalEnding: 'мя', correctEnding: 'мени', possibleEndings: ['мя', 'мени', 'мю', 'мем'], explanation: 'время 中性，词尾 -мя 变 -мени。' },
-    { text: 'В зале нет свободного место.', targetWord: 'место', originalEnding: 'о', correctEnding: 'а', possibleEndings: ['о', 'а', 'у', 'ом'], explanation: 'место 中性，词尾 -о 变 -а。' },
-    { text: 'Мы отдыхали у море.', targetWord: 'море', originalEnding: 'е', correctEnding: 'я', possibleEndings: ['е', 'я', 'у', 'ем'], explanation: 'море 中性，词尾 -е 变 -я。' },
-    { text: 'У этой книга красивая обложка.', targetWord: 'книга', originalEnding: 'га', correctEnding: 'ги', possibleEndings: ['га', 'ги', 'ге', 'гу'], explanation: 'книга 阴性，词尾 -а 变 -и。' },
-    { text: 'Около этой дверь стоит стул.', targetWord: 'дверь', originalEnding: 'ь', correctEnding: 'и', possibleEndings: ['ь', 'и', 'е', 'ю'], explanation: 'дверь 阴性，词尾 -ь 变 -и。' },
-    { text: 'Из этой комната вышел человек.', targetWord: 'комната', originalEnding: 'а', correctEnding: 'ы', possibleEndings: ['а', 'ы', 'е', 'у'], explanation: 'комната 阴性，词尾 -а 变 -ы。' },
-    { text: 'В бутылке нет холодной вода.', targetWord: 'вода', originalEnding: 'а', correctEnding: 'ы', possibleEndings: ['а', 'ы', 'е', 'у'], explanation: 'вода 阴性，词尾 -а 变 -ы。' },
-    { text: 'У этой семья трое детей.', targetWord: 'семья', originalEnding: 'я', correctEnding: 'и', possibleEndings: ['я', 'и', 'е', 'ю'], explanation: 'семья 阴性，词尾 -я 变 -и。' },
-    { text: 'У этой женщина красивые глаза.', targetWord: 'женщина', originalEnding: 'а', correctEnding: 'ы', possibleEndings: ['а', 'ы', 'е', 'у'], explanation: 'женщина 阴性，词尾 -а 变 -ы。' },
-    { text: 'В доме много окна.', targetWord: 'окна', originalEnding: '', correctEnding: '', possibleEndings: ['окна', 'окон', 'окнам', 'окнами'], explanation: 'окна 复数，词尾消失且移动元音（特殊变格）。', correctFullWord: 'окон' },
-    { text: 'В этом районе много семьи.', targetWord: 'семьи', originalEnding: '', correctEnding: '', possibleEndings: ['семьи', 'семей', 'семьям', 'семьями'], explanation: 'семьи 复数，词尾消失且移动元音（特殊变格）。', correctFullWord: 'семей' },
-    
-    // 3格（40题）
-    { text: 'Я даю книгу друг.', targetWord: 'друг', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'друг 阳性名词，第三格加-у → другу。' },
-    { text: 'Мы идём к врач.', targetWord: 'врач', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'врач 阳性名词，第三格加-у → врачу。' },
-    { text: 'Учитель объясняет урок ученик.', targetWord: 'ученик', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'ученик 阳性名词，第三格加-у → ученику。' },
-    { text: 'Я посылаю сообщение брат.', targetWord: 'брат', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'брат 阳性名词，第三格加-у → брату。' },
-    { text: 'Он рад подарок.', targetWord: 'подарок', originalEnding: '', correctEnding: '', possibleEndings: ['подарку', 'подарка', 'подарком', 'подарке'], explanation: 'подарок 阳性名词，变格时词尾变化 → подарку。', correctFullWord: 'подарку' },
-    { text: 'Мне нужно позвонить отец.', targetWord: 'отец', originalEnding: '', correctEnding: '', possibleEndings: ['отцу', 'отца', 'отцом', 'отце'], explanation: 'отец 阳性名词，变格时词尾变化 → отцу。', correctFullWord: 'отцу' },
-    { text: 'Мы готовимся к экзамен.', targetWord: 'экзамен', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'экзамен 阳性名词，第三格加-у → экзамену。' },
-    { text: 'Я советую студент читать книгу.', targetWord: 'студент', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'студент 阳性名词，第三格加-у → студенту。' },
-    { text: 'Он учится русскому язык.', targetWord: 'язык', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'язык 阳性名词，第三格加-у → языку。' },
-    { text: 'Он мешает сосед.', targetWord: 'сосед', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'сосед 阳性名词，第三格加-у → соседу。' },
-    { text: 'Кошка идёт к хозяин.', targetWord: 'хозяин', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'хозяин 阳性名词，第三格加-у → хозяину。' },
-    { text: 'Дети радуются праздник.', targetWord: 'праздник', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'праздник 阳性名词，第三格加-у → празднику。' },
-    { text: 'Он звонит товарищ.', targetWord: 'товарищ', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'товарищ 阳性名词，第三格加-у → товарищу。' },
-    { text: 'Мы пишем сочинение по план.', targetWord: 'план', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'план 阳性名词，第三格加-у → плану。' },
-    { text: 'Я купил подарок сын.', targetWord: 'сын', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'сын 阳性名词，第三格加-у → сыну。' },
-    { text: 'Студенты готовятся к зачёт.', targetWord: 'зачёт', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'зачёт 阳性名词，第三格加-у → зачёту。' },
-    { text: 'Я послал письмо директор.', targetWord: 'директор', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'директор 阳性名词，第三格加-у → директору。' },
-    { text: 'Мы гуляем по парк.', targetWord: 'парк', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'парк 阳性名词，第三格加-у → парку。' },
-    { text: 'Мы следуем совет врача.', targetWord: 'совет', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'ю', 'ам', 'ям'], explanation: 'совет 阳性名词，第三格加-у → совету。' },
-    { text: 'Он завидует приятель.', targetWord: 'приятель', originalEnding: 'ь', correctEnding: 'ю', possibleEndings: ['ю', 'у', 'ам', 'ям'], explanation: 'приятель 阳性名词，词尾-ь→-ю → приятелю。' },
-    { text: 'Я обещаю знакомый помочь.', targetWord: 'знакомый', originalEnding: 'ый', correctEnding: 'ому', possibleEndings: ['ому', 'ому', 'ам', 'ям'], explanation: 'знакомый 形容词化名词，第三格→знакомому。' },
-    { text: 'Мы верим дети.', targetWord: 'дети', originalEnding: 'и', correctEnding: 'ям', possibleEndings: ['ям', 'ам', 'у', 'ю'], explanation: 'дети 复数，词尾-и→-ям → детям。' },
-    { text: 'Я пишу письмо родители.', targetWord: 'родители', originalEnding: 'и', correctEnding: 'ям', possibleEndings: ['ям', 'ам', 'у', 'ю'], explanation: 'родители 复数，词尾-и→-ям → родителям。' },
-    { text: 'Он показывает город туристы.', targetWord: 'туристы', originalEnding: 'ы', correctEnding: 'ам', possibleEndings: ['ам', 'ям', 'у', 'ю'], explanation: 'туристы 复数，词尾-ы→-ам → туристам。' },
-    { text: 'Он помогает родственники.', targetWord: 'родственники', originalEnding: 'и', correctEnding: 'ам', possibleEndings: ['ам', 'ям', 'у', 'ю'], explanation: 'родственники 复数，词尾-и→-ам → родственникам。' },
-    { text: 'Мы сочувствуем пострадавшие.', targetWord: 'пострадавшие', originalEnding: 'ие', correctEnding: 'им', possibleEndings: ['им', 'ам', 'ям', 'у'], explanation: 'пострадавшие 形容词化名词复数，词尾-ие→-им → пострадавшим。' },
-    { text: 'Дети рады яблоки.', targetWord: 'яблоки', originalEnding: 'и', correctEnding: 'ам', possibleEndings: ['ам', 'ям', 'у', 'ю'], explanation: 'яблоки 复数，词尾-и→-ам → яблокам。' },
-    { text: 'Он помогает сестра.', targetWord: 'сестра', originalEnding: 'а', correctEnding: 'е', possibleEndings: ['е', 'у', 'ы', 'ой'], explanation: 'сестра 阴性名词，词尾-а→-е → сестре。' },
-    { text: 'Дети пишут письмо бабушка.', targetWord: 'бабушка', originalEnding: 'а', correctEnding: 'е', possibleEndings: ['е', 'у', 'ы', 'ой'], explanation: 'бабушка 阴性名词，词尾-а→-е → бабушке。' },
-    { text: 'Я звоню мама.', targetWord: 'мама', originalEnding: 'а', correctEnding: 'е', possibleEndings: ['е', 'у', 'ы', 'ой'], explanation: 'мама 阴性名词，词尾-а→-е → маме。' },
-    { text: 'Кот бежит к мышь.', targetWord: 'мышь', originalEnding: 'ь', correctEnding: 'и', possibleEndings: ['и', 'ю', 'у', 'е'], explanation: 'мышь 阴性名词，词尾-ь→-и → мыши。' },
-    { text: 'Она покупает подарок подруга.', targetWord: 'подруга', originalEnding: 'а', correctEnding: 'е', possibleEndings: ['е', 'у', 'ы', 'ой'], explanation: 'подруга 阴性名词，词尾-а→-е → подруге。' },
-    { text: 'Мы гуляем по улица.', targetWord: 'улица', originalEnding: 'а', correctEnding: 'е', possibleEndings: ['е', 'у', 'ы', 'ой'], explanation: 'улица 阴性名词，词尾-а→-е → улице。' },
-    { text: 'Дети идут к учительница.', targetWord: 'учительница', originalEnding: 'а', correctEnding: 'е', possibleEndings: ['е', 'у', 'ы', 'ой'], explanation: 'учительница 阴性名词，词尾-а→-е → учительнице。' },
-    { text: 'Я помогаю дедушка.', targetWord: 'дедушка', originalEnding: 'а', correctEnding: 'е', possibleEndings: ['е', 'у', 'ы', 'ой'], explanation: 'дедушка 阳性名词（按阴性变），词尾-а→-е → дедушке。' },
-    { text: 'Студенты отвечают преподаватель.', targetWord: 'преподаватель', originalEnding: 'ь', correctEnding: 'ю', possibleEndings: ['ю', 'у', 'и', 'е'], explanation: 'преподаватель 阳性名词，词尾-ь→-ю → преподавателю。' },
-    { text: 'Мы идём по поле.', targetWord: 'поле', originalEnding: 'е', correctEnding: 'ю', possibleEndings: ['ю', 'у', 'а', 'ом'], explanation: 'поле 中性名词，词尾-е→-ю → полю。' },
-    { text: 'Мы идём к море.', targetWord: 'море', originalEnding: 'е', correctEnding: 'ю', possibleEndings: ['ю', 'у', 'а', 'ом'], explanation: 'море 中性名词，词尾-е→-ю → морю。' },
-    
-    // 4格（25题）
-    { text: 'Он любит друг.', targetWord: 'друг', originalEnding: '', correctEnding: 'а', possibleEndings: ['а', 'у', 'ом', 'е'], explanation: 'друг 阳性动物名词，第四格直接加-а → друга。' },
-    { text: 'Я вижу брат.', targetWord: 'брат', originalEnding: '', correctEnding: 'а', possibleEndings: ['а', 'у', 'ом', 'е'], explanation: 'брат 阳性动物名词，第四格直接加-а → брата。' },
-    { text: 'Она ждёт сын.', targetWord: 'сын', originalEnding: '', correctEnding: 'а', possibleEndings: ['а', 'у', 'ом', 'е'], explanation: 'сын 阳性动物名词，第四格直接加-а → сына。' },
-    { text: 'Ты видишь кот?', targetWord: 'кот', originalEnding: '', correctEnding: 'а', possibleEndings: ['а', 'у', 'ом', 'е'], explanation: 'кот 阳性动物名词，第四格直接加-а → кота。' },
-    { text: 'Мы знаем студент.', targetWord: 'студент', originalEnding: '', correctEnding: 'а', possibleEndings: ['а', 'у', 'ом', 'е'], explanation: 'студент 阳性动物名词，第四格直接加-а → студента。' },
-    { text: 'Они слушают врач.', targetWord: 'врач', originalEnding: '', correctEnding: 'а', possibleEndings: ['а', 'у', 'ом', 'е'], explanation: 'врач 阳性动物名词，第四格直接加-а → врача。' },
-    { text: 'Студенты отвечают преподаватель.', targetWord: 'преподаватель', originalEnding: 'ь', correctEnding: 'я', possibleEndings: ['я', 'ю', 'и', 'е'], explanation: 'преподаватель 阳性动物名词，词尾-ь→-я → преподавателя。' },
-    { text: 'Ученики слушают учитель.', targetWord: 'учитель', originalEnding: 'ь', correctEnding: 'я', possibleEndings: ['я', 'ю', 'и', 'е'], explanation: 'учитель 阳性动物名词，词尾-ь→-я → учителя。' },
-    { text: 'Он любит сестра.', targetWord: 'сестра', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'сестра 阴性名词，词尾-а→-у → сестру。' },
-    { text: 'Ты любишь мама?', targetWord: 'мама', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'мама 阴性名词，词尾-а→-у → маму。' },
-    { text: 'Мы помним бабушка.', targetWord: 'бабушка', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'бабушка 阴性名词，词尾-а→-у → бабушку。' },
-    { text: 'Она ждёт девушка.', targetWord: 'девушка', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'девушка 阴性名词，词尾-а→-у → девушку。' },
-    { text: 'Ты видишь кошка?', targetWord: 'кошка', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'кошка 阴性名词，词尾-а→-у → кошку。' },
-    { text: 'Они видят собака.', targetWord: 'собака', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'собака 阴性名词，词尾-а→-у → собаку。' },
-    { text: 'Я читаю книга.', targetWord: 'книга', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'книга 阴性名词，词尾-а→-у → книгу。' },
-    { text: 'Ты пишешь ручка?', targetWord: 'ручка', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'ручка 阴性名词，词尾-а→-у → ручку。' },
-    { text: 'Мы убираем комната.', targetWord: 'комната', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'комната 阴性名词，词尾-а→-у → комнату。' },
-    { text: 'Она чистит машина.', targetWord: 'машина', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'машина 阴性名词，词尾-а→-у → машину。' },
-    { text: 'Ты любишь работа?', targetWord: 'работа', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'работа 阴性名词，词尾-а→-у → работу。' },
-    { text: 'Мы идём в школа.', targetWord: 'школа', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'школа 阴性名词，词尾-а→-у → школу。' },
-    { text: 'Он видит подруга.', targetWord: 'подруга', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'подруга 阴性名词，词尾-а→-у → подругу。' },
-    { text: 'Ученики слушают учительница.', targetWord: 'учительница', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'учительница 阴性名词，词尾-а→-у → учительницу。' },
-    { text: 'Ты любишь жена?', targetWord: 'жена', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'жена 阴性名词，词尾-а→-у → жену。' },
-    { text: 'Она читает газета.', targetWord: 'газета', originalEnding: 'а', correctEnding: 'у', possibleEndings: ['у', 'ы', 'е', 'ой'], explanation: 'газета 阴性名词，词尾-а→-у → газету。' },
-    
-    // 5格（40题）
-    { text: 'Он доволен стол.', targetWord: 'стол', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'стол 阳性名词，工具格直接加 -ом → столом。' },
-    { text: 'Мы гордимся дом.', targetWord: 'дом', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'дом 阳性名词，工具格直接加 -ом → домом。' },
-    { text: 'Он рисует карандаш.', targetWord: 'карандаш', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'ем', 'у'], explanation: 'карандаш 阳性名词，工具格直接加 -ом → карандашом。' },
-    { text: 'Я пользуюсь телефон.', targetWord: 'телефон', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'телефон 阳性名词，工具格直接加 -ом → телефоном。' },
-    { text: 'Студент пользуется учебник.', targetWord: 'учебник', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'учебник 阳性名词，工具格直接加 -ом → учебником。' },
-    { text: 'Он наслаждается чай.', targetWord: 'чай', originalEnding: 'й', correctEnding: 'ем', possibleEndings: ['ем', 'я', 'ю', 'ом'], explanation: 'чай 阳性名词，工具格直接加 -ем → чаем。' },
-    { text: 'Он ест суп с хлеб.', targetWord: 'хлеб', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'хлеб 阳性名词，工具格直接加 -ом → хлебом。' },
-    { text: 'Я иду в кино с друг.', targetWord: 'друг', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'друг 阳性名词，工具格直接加 -ом → другом。' },
-    { text: 'Она разговаривает с брат.', targetWord: 'брат', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'брат 阳性名词，工具格直接加 -ом → братом。' },
-    { text: 'Он работает врач.', targetWord: 'врач', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'ем', 'у'], explanation: 'врач 阳性名词，工具格直接加 -ом → врачом。' },
-    { text: 'Он стал студент.', targetWord: 'студент', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'студент 阳性名词，工具格直接加 -ом → студентом。' },
-    { text: 'Я познакомился с сосед.', targetWord: 'сосед', originalEnding: '', correctEnding: 'ом', possibleEndings: ['ом', 'а', 'у', 'е'], explanation: 'сосед 阳性名词，工具格直接加 -ом → соседом。' },
-    { text: 'Он любуется окно.', targetWord: 'окно', originalEnding: '', correctEnding: '', possibleEndings: ['окном', 'окна', 'окну', 'окне'], explanation: 'окно 中性名词，工具格直接加 -м → окном。', correctFullWord: 'окном' },
-    { text: 'Он думает над слово.', targetWord: 'слово', originalEnding: '', correctEnding: 'м', possibleEndings: ['м', 'а', 'у', 'е'], explanation: 'слово 中性名词，工具格直接加 -м → словом。' },
-    { text: 'Он занят письмо.', targetWord: 'письмо', originalEnding: '', correctEnding: 'м', possibleEndings: ['м', 'а', 'у', 'е'], explanation: 'письмо 中性名词，工具格直接加 -м → письмом。' },
-    { text: 'Мы любуемся море.', targetWord: 'море', originalEnding: '', correctEnding: 'м', possibleEndings: ['м', 'я', 'ю', 'е'], explanation: 'море 中性名词，工具格直接加 -м → морем。' },
-    { text: 'Он стоит перед ворота.', targetWord: 'ворота', originalEnding: '', correctEnding: 'ми', possibleEndings: ['ми', 'в', 'ам', 'ах'], explanation: 'ворота 复数名词，工具格直接加 -ми → воротами。' },
-    { text: 'Моя мама работает учитель.', targetWord: 'учитель', originalEnding: 'ь', correctEnding: 'ем', possibleEndings: ['ем', 'я', 'ю', 'ом'], explanation: 'учитель 阳性名词，-ь 变为 -ем → учителем。' },
-    { text: 'Я интересуюсь книга.', targetWord: 'книга', originalEnding: 'а', correctEnding: 'ой', possibleEndings: ['ой', 'ы', 'е', 'у'], explanation: 'книга 阴性名词，-а 变为 -ой → книгой。' },
-    { text: 'Он пишет ручка.', targetWord: 'ручка', originalEnding: 'а', correctEnding: 'ой', possibleEndings: ['ой', 'ы', 'е', 'у'], explanation: 'ручка 阴性名词，-а 变为 -ой → ручкой。' },
-    { text: 'Мы управляем машина.', targetWord: 'машина', originalEnding: 'а', correctEnding: 'ой', possibleEndings: ['ой', 'ы', 'е', 'у'], explanation: 'машина 阴性名词，-а 变为 -ой → машиной。' },
-    { text: 'Она гордится школа.', targetWord: 'школа', originalEnding: 'а', correctEnding: 'ой', possibleEndings: ['ой', 'ы', 'е', 'у'], explanation: 'школа 阴性名词，-а 变为 -ой → школой。' },
-    { text: 'Мы довольны квартира.', targetWord: 'квартира', originalEnding: 'а', correctEnding: 'ой', possibleEndings: ['ой', 'ы', 'е', 'у'], explanation: 'квартира 阴性名词，-а 变为 -ой → квартирой。' },
-    { text: 'Он моет руки вода.', targetWord: 'вода', originalEnding: 'а', correctEnding: 'ой', possibleEndings: ['ой', 'ы', 'е', 'у'], explanation: 'вода 阴性名词，-а 变为 -ой → водой。' },
-    { text: 'Он увлекается музыка.', targetWord: 'музыка', originalEnding: 'а', correctEnding: 'ой', possibleEndings: ['ой', 'ы', 'е', 'у'], explanation: 'музыка 阴性名词，-а 变为 -ой → музыкой。' },
-    { text: 'Я гуляю с сестра.', targetWord: 'сестра', originalEnding: 'а', correctEnding: 'ой', possibleEndings: ['ой', 'ы', 'е', 'у'], explanation: 'сестра 阴性名词，-а 变为 -ой → сестрой。' },
-    { text: 'Мальчик дружит с девочка.', targetWord: 'девочка', originalEnding: 'а', correctEnding: 'ой', possibleEndings: ['ой', 'ы', 'е', 'у'], explanation: 'девочка 阴性名词，-а 变为 -ой → девочкой。' },
-    { text: 'Он познакомился с женщина.', targetWord: 'женщина', originalEnding: 'а', correctEnding: 'ой', possibleEndings: ['ой', 'ы', 'е', 'у'], explanation: 'женщина 阴性名词，-а 变为 -ой → женщиной。' },
-    { text: 'Дети играют с собака.', targetWord: 'собака', originalEnding: 'а', correctEnding: 'ой', possibleEndings: ['ой', 'ы', 'е', 'у'], explanation: 'собака 阴性名词，-а 变为 -ой → собакой。' },
-    { text: 'Девочка играет с кошка.', targetWord: 'кошка', originalEnding: 'а', correctEnding: 'ой', possibleEndings: ['ой', 'ы', 'е', 'у'], explanation: 'кошка 阴性名词，-а 变为 -ой → кошкой。' },
-    { text: 'Он платит деньги.', targetWord: 'деньги', originalEnding: 'и', correctEnding: 'ами', possibleEndings: ['ами', 'г', 'гам', 'гах'], explanation: 'деньги 复数名词，-и 变为 -ами → деньгами。' },
-    { text: 'Он измеряет время часы.', targetWord: 'часы', originalEnding: 'ы', correctEnding: 'ами', possibleEndings: ['ами', 'ов', 'ам', 'ах'], explanation: 'часы 复数名词，-ы 变为 -ами → часами。' },
-    { text: 'Он пользуется очки.', targetWord: 'очки', originalEnding: 'и', correctEnding: 'ами', possibleEndings: ['ами', 'к', 'кам', 'ках'], explanation: 'очки 复数名词，-и 变为 -ами → очками。' },
-    { text: 'Она режет бумагу ножницы.', targetWord: 'ножницы', originalEnding: 'ы', correctEnding: 'ами', possibleEndings: ['ами', 'ц', 'цам', 'цах'], explanation: 'ножницы 复数名词，-ы 变为 -ами → ножницами。' },
-    { text: 'Он доволен брюки.', targetWord: 'брюки', originalEnding: 'и', correctEnding: 'ами', possibleEndings: ['ами', 'к', 'кам', 'ках'], explanation: 'брюки 复数名词，-и 变为 -ами → брюками。' },
-    { text: 'Он живёт с отец.', targetWord: 'отец', originalEnding: '', correctEnding: '', possibleEndings: ['отцом', 'отца', 'отцу', 'отце'], explanation: 'отец 阳性名词，变格时 е 脱落 → отцом。', correctFullWord: 'отцом' },
-    { text: 'Он говорит с мать.', targetWord: 'мать', originalEnding: '', correctEnding: '', possibleEndings: ['матерью', 'матери', 'матери', 'матери'], explanation: 'мать 阴性名词，变格时增加 -ер- → матерью。', correctFullWord: 'матерью' },
-    { text: 'Она гордится дочь.', targetWord: 'дочь', originalEnding: '', correctEnding: '', possibleEndings: ['дочерью', 'дочери', 'дочери', 'дочери'], explanation: 'дочь 阴性名词，变格时增加 -ер- → дочерью。', correctFullWord: 'дочерью' },
-    { text: 'Он общается с люди.', targetWord: 'люди', originalEnding: '', correctEnding: '', possibleEndings: ['людьми', 'людей', 'людям', 'людях'], explanation: 'люди 复数名词，词干变化 → людьми。', correctFullWord: 'людьми' },
-    { text: 'Она играет с дети.', targetWord: 'дети', originalEnding: '', correctEnding: '', possibleEndings: ['детьми', 'детей', 'детям', 'детях'], explanation: 'дети 复数名词，词干变化 → детьми。', correctFullWord: 'детьми' },
-    
-    // 6格（30题）
-    { text: 'Мы живём в доме.', targetWord: 'дом', originalEnding: '', correctEnding: 'е', possibleEndings: ['е', 'а', 'у', 'ом'], explanation: 'дом 阳性名词，前置格直接加 -е → доме。' },
-    { text: 'Они гуляли в густом лес.', targetWord: 'лес', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'е', 'а', 'ом'], explanation: 'лес 阳性名词，前置格特殊形式 -у → лесу。' },
-    { text: 'Дети играют в красивом сад.', targetWord: 'сад', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'е', 'а', 'ом'], explanation: 'сад 阳性名词，前置格特殊形式 -у → саду。' },
-    { text: 'Он встретил меня в международном аэропорт.', targetWord: 'аэропорт', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'е', 'а', 'ом'], explanation: 'аэропорт 阳性名词，特殊变化，前置格直接加 -у → аэропорту。' },
-    { text: 'Это случилось в прошлом год.', targetWord: 'год', originalEnding: '', correctEnding: 'у', possibleEndings: ['у', 'е', 'а', 'ом'], explanation: 'год 阳性名词，前置格直接加 -у → году。' },
-    { text: 'Он рассказал о том человек.', targetWord: 'человек', originalEnding: '', correctEnding: 'е', possibleEndings: ['е', 'а', 'у', 'ом'], explanation: 'человек 阳性名词，前置格直接加 -е → человеке。' },
-    { text: 'Я часто думаю о моём друг.', targetWord: 'друг', originalEnding: '', correctEnding: 'е', possibleEndings: ['е', 'а', 'у', 'ом'], explanation: 'друг 阳性名词，前置格直接加 -е → друге。' },
-    { text: 'Он заботится о своём брат.', targetWord: 'брат', originalEnding: '', correctEnding: 'е', possibleEndings: ['е', 'а', 'у', 'ом'], explanation: 'брат 阳性名词，前置格直接加 -е → брате。' },
-    { text: 'Они живут в новых дома.', targetWord: 'дома', originalEnding: '', correctEnding: '', possibleEndings: ['домах', 'домов', 'домами', 'домом'], explanation: 'дом 复数，前置格直接加 -х → домах。', correctFullWord: 'домах' },
-    { text: 'Мы были в разных города.', targetWord: 'города', originalEnding: '', correctEnding: '', possibleEndings: ['городах', 'городов', 'городами', 'городом'], explanation: 'город 复数，前置格直接加 -х → городах。', correctFullWord: 'городах' },
-    { text: 'Они гуляли в густых леса.', targetWord: 'леса', originalEnding: '', correctEnding: '', possibleEndings: ['лесах', 'лесов', 'лесами', 'лесом'], explanation: 'леса 复数，前置格直接变 -ах → лесах。', correctFullWord: 'лесах' },
-    { text: 'Он думает о минувших года.', targetWord: 'года', originalEnding: '', correctEnding: '', possibleEndings: ['годах', 'годов', 'годами', 'годом'], explanation: 'год 复数，前置格直接加 -х → годах。', correctFullWord: 'годах' },
-    { text: 'Мы живём в разных страна.', targetWord: 'страна', originalEnding: '', correctEnding: '', possibleEndings: ['странах', 'стран', 'странами', 'страной'], explanation: 'страна 复数，前置格直接加 -х → странах。', correctFullWord: 'странах' },
-    { text: 'На старых улица.', targetWord: 'улица', originalEnding: '', correctEnding: '', possibleEndings: ['улицах', 'улиц', 'улицами', 'улицей'], explanation: 'улица 复数，前置格直接加 -х → улицах。', correctFullWord: 'улицах' },
-    { text: 'Я нашёл это слово в этом словарь.', targetWord: 'словарь', originalEnding: 'ь', correctEnding: 'е', possibleEndings: ['е', 'я', 'и', 'ю'], explanation: 'словарь -ь 变为 -е → словаре。' },
-    { text: 'Ошибка в этой книга.', targetWord: 'книга', originalEnding: 'а', correctEnding: 'е', possibleEndings: ['е', 'ы', 'у', 'ю'], explanation: 'книга -а 变为 -е → книге。' },
-    { text: 'Он записал это в синей тетрадь.', targetWord: 'тетрадь', originalEnding: 'ь', correctEnding: 'и', possibleEndings: ['и', 'е', 'ю', 'я'], explanation: 'тетрадь -ь 变为 -и → тетради。' },
-    { text: 'Надпись на той дверь.', targetWord: 'дверь', originalEnding: 'ь', correctEnding: 'и', possibleEndings: ['и', 'е', 'ю', 'я'], explanation: 'дверь -ь 变为 -и → двери。' },
-    { text: 'Картина висит на белой стена.', targetWord: 'стена', originalEnding: 'а', correctEnding: 'е', possibleEndings: ['е', 'ы', 'у', 'ю'], explanation: 'стена -а 变为 -е → стене。' },
-    { text: 'Мы гуляли на центральной улица.', targetWord: 'улица', originalEnding: 'а', correctEnding: 'е', possibleEndings: ['е', 'ы', 'у', 'ю'], explanation: 'улица -а 变为 -е → улице。' },
-    { text: 'Они встретились на главной площадь.', targetWord: 'площадь', originalEnding: 'ь', correctEnding: 'и', possibleEndings: ['и', 'е', 'ю', 'я'], explanation: 'площадь -ь 变为 -и → площади。' },
-    { text: 'Мы купались в холодной река.', targetWord: 'река', originalEnding: 'а', correctEnding: 'е', possibleEndings: ['е', 'ы', 'у', 'ю'], explanation: 'река -а 变为 -е → реке。' },
-    { text: 'Я живу в большой страна.', targetWord: 'страна', originalEnding: 'а', correctEnding: 'е', possibleEndings: ['е', 'ы', 'у', 'ю'], explanation: 'страна -а 变为 -е → стране。' },
-    { text: 'У него проблемы в его семья.', targetWord: 'семья', originalEnding: 'я', correctEnding: 'е', possibleEndings: ['е', 'ы', 'и', 'ю'], explanation: 'семья -я 变为 -е → семье。' },
-    { text: 'Ошибка в этом письмо.', targetWord: 'письмо', originalEnding: 'о', correctEnding: 'е', possibleEndings: ['е', 'а', 'у', 'ом'], explanation: 'письмо -о 变为 -е → письме。' },
-    { text: 'Мы сидели на удобном место.', targetWord: 'место', originalEnding: 'о', correctEnding: 'е', possibleEndings: ['е', 'а', 'у', 'ом'], explanation: 'место -о 变为 -е → месте。' },
-    { text: 'Мы находимся в высоком здание.', targetWord: 'здание', originalEnding: 'ие', correctEnding: 'ии', possibleEndings: ['ии', 'ия', 'ием', 'ия'], explanation: 'здание -ие 变为 -ии → здании。' },
-    { text: 'Он искал информацию в этих книги.', targetWord: 'книги', originalEnding: '', correctEnding: '', possibleEndings: ['книгах', 'книг', 'книгами', 'книгой'], explanation: 'книга 复数 -и 变为 -ах → книгах。', correctFullWord: 'книгах' },
-    { text: 'Ошибки в этих тетради.', targetWord: 'тетради', originalEnding: '', correctEnding: '', possibleEndings: ['тетрадях', 'тетрадей', 'тетрадями', 'тетрадью'], explanation: 'тетрадь 复数 -и 变为 -ях → тетрадях。', correctFullWord: 'тетрадях' },
-    { text: 'Люди собрались на центральных площади.', targetWord: 'площади', originalEnding: '', correctEnding: '', possibleEndings: ['площадях', 'площадей', 'площадями', 'площадью'], explanation: 'площадь 复数 -и 变为 -ях → площадях。', correctFullWord: 'площадях' }
-  ]
-  
   const pool = [...testQuestionPool]
-  const totalQuestions = pool.length
   
-  // Fisher-Yates 洗牌算法
-  const shuffle = (array: number[]) => {
-    const arr = [...array]
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      const temp = arr[i]
-      arr[i] = arr[j] as number
-      arr[j] = temp as number
-    }
-    return arr
+  // 如果已经使用了所有题目，重新开始
+  if (usedQuestionIndices.value.length >= pool.length) {
+    usedQuestionIndices.value = []
   }
   
-  // 获取当前周期内未使用的索引
-  const getAvailableIndices = () => {
-    const usedSet = new Set(selectionState.usedIndices)
-    const available: number[] = []
-    for (let i = 0; i < totalQuestions; i++) {
-      if (!usedSet.has(i)) {
-        available.push(i)
-      }
-    }
-    return available
-  }
+  // 生成未使用的题目索引
+  const availableIndices = pool
+    .map((_, idx) => idx)
+    .filter(idx => !usedQuestionIndices.value.includes(idx))
   
-  let availableIndices = getAvailableIndices()
+  // 打乱可用索引
+  const shuffledAvailable = shuffle(availableIndices)
   
-  // 检查是否需要重置（可用题目少于15道）
-  if (availableIndices.length < 15 && selectionState.usedIndices.length > 0) {
-    resetSelectionState()
-    availableIndices = getAvailableIndices()
-  }
+  // 选择15道题目
+  const selectedIndices = shuffledAvailable.slice(0, 15) as number[]
   
-  let selectedIndices: number[] = []
-  
-  // 正常情况：从当前周期未使用的题目中选择
-  if (availableIndices.length >= 15) {
-    const shuffled = shuffle(availableIndices)
-    selectedIndices = shuffled.slice(0, 15) as number[]
-  } else {
-    // 边界情况：题目池本身小于15道题
-    selectedIndices = [...availableIndices]
-    const allIndices = pool.map((_, idx) => idx)
-    while (selectedIndices.length < 15) {
-      const randomIdx = Math.floor(Math.random() * totalQuestions)
-      selectedIndices.push(allIndices[randomIdx] as number)
-    }
-  }
-  
-  // 更新已使用的索引
-  selectionState.usedIndices = [...selectionState.usedIndices, ...selectedIndices]
-  saveSelectionState()
+  // 将选中的索引添加到已使用列表
+  usedQuestionIndices.value.push(...selectedIndices)
   
   // 根据选中的索引获取题目
   const selected = selectedIndices
@@ -755,25 +6308,98 @@ const generateTestQuestions = () => {
   
   return selected.map((sentence, index) => {
     const targetWord = sentence.targetWord
-    const originalEnding = sentence.originalEnding
-    const baseWord = originalEnding !== '' && targetWord.endsWith(originalEnding) 
-      ? targetWord.slice(0, -originalEnding.length) 
-      : targetWord
+    const correctAnswer = sentence.correctAnswer
     
-    let correctAnswer: string
-    let options: string[]
+    // 分离形容词和名词
+    const words = targetWord.split(' ')
+    const adjective = words[0]
+    const noun = words[1]
     
-    if (sentence.correctFullWord) {
-      correctAnswer = sentence.correctFullWord
-      options = sentence.possibleEndings
-    } else {
-      correctAnswer = baseWord + sentence.correctEnding
-      options = sentence.possibleEndings.map(ending => baseWord + ending)
+    // 处理文本，高亮形容词和名词
+    let processedText = sentence.text
+    processedText = processedText.replace(/<[^>]*>/g, '')
+    
+    // 高亮形容词（蓝色）和名词（红色）
+    const targetIndex = processedText.indexOf(targetWord)
+    if (targetIndex !== -1) {
+      const before = processedText.slice(0, targetIndex)
+      const after = processedText.slice(targetIndex + targetWord.length)
+      processedText = before + `<span style="color: #3498db;">${adjective}</span> <span style="color: #e74c3c;">${noun}</span>` + after
     }
     
-    const uniqueOptions = [...new Set(options)]
+    // 生成选项（基于正确答案）
+    const options = [correctAnswer]
     
-    // 打乱选项顺序，避免正确答案总是在同一个位置
+    // 生成干扰选项
+    const correctWords = correctAnswer.split(' ')
+    const correctAdj = correctWords[0] || ''
+    const correctNoun = correctWords[1] || ''
+    
+    if (!correctAdj || !correctNoun) {
+      return {
+        id: index + 1,
+        text: processedText,
+        targetWord: sentence.targetWord,
+        options: [correctAnswer],
+        correctAnswer: 0,
+        explanation: sentence.explanation,
+        number: sentence.number
+      }
+    }
+    
+    // 提取词干
+    const adjStem = correctAdj.replace(/(ый|ой|ий|ая|ое|ые|ого|его|ому|ему|ым|им|ую|ою|ых|их|ыми|ими)$/, '')
+    const nounStem = correctNoun.replace(/(а|я|о|е|ы|и|у|ю|ой|ей|ов|ев|ам|ям|ами|ями|ах|ях)$/, '')
+    
+    // 生成不同的形容词变格
+    const adjVariants = [
+      correctAdj,
+      adjStem + 'ый',
+      adjStem + 'ого',
+      adjStem + 'ому',
+      adjStem + 'ым',
+      adjStem + 'ая',
+      adjStem + 'ой',
+      adjStem + 'ую',
+      adjStem + 'ое',
+      adjStem + 'ые',
+      adjStem + 'ых',
+      adjStem + 'ыми'
+    ].filter(adj => adj !== correctAdj)
+    
+    // 生成不同的名词变格
+    const nounVariants = [
+      correctNoun,
+      nounStem + 'а',
+      nounStem + 'я',
+      nounStem + 'у',
+      nounStem + 'ю',
+      nounStem + 'ом',
+      nounStem + 'ем',
+      nounStem + 'ой',
+      nounStem + 'ей',
+      nounStem + 'ов',
+      nounStem + 'ев',
+      nounStem + 'ам',
+      nounStem + 'ям',
+      nounStem + 'ами',
+      nounStem + 'ями',
+      nounStem + 'ах',
+      nounStem + 'ях'
+    ].filter(noun => noun !== correctNoun)
+    
+    // 组合生成干扰选项
+    for (let i = 0; i < 3 && i < adjVariants.length; i++) {
+      options.push((adjVariants[i] as string) + ' ' + correctNoun)
+    }
+    for (let i = 0; i < 3 && i < nounVariants.length; i++) {
+      options.push(correctAdj + ' ' + (nounVariants[i] as string))
+    }
+    
+    // 去重
+    const uniqueOptions = [...new Set(options)].slice(0, 4)
+    
+    // 打乱选项顺序
     const shuffledOptions = [...uniqueOptions]
     for (let i = shuffledOptions.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1))
@@ -782,20 +6408,8 @@ const generateTestQuestions = () => {
       shuffledOptions[j] = temp as string
     }
     
-    // 找到打乱后的正确答案索引
+    // 找到正确答案的索引
     const correctAnswerIndex = shuffledOptions.indexOf(correctAnswer)
-    
-    // 更可靠的方法：先清理句子中的任何HTML标签
-    let processedText = sentence.text
-    processedText = processedText.replace(/<[^>]*>/g, '')
-    
-    // 找到目标词的位置并添加蓝色样式
-    const targetIndex = processedText.indexOf(targetWord)
-    if (targetIndex !== -1) {
-      const before = processedText.slice(0, targetIndex)
-      const after = processedText.slice(targetIndex + targetWord.length)
-      processedText = before + `<span style="color: #3498db;">${targetWord}</span>` + after
-    }
     
     return {
       id: index + 1,
@@ -803,7 +6417,8 @@ const generateTestQuestions = () => {
       targetWord: sentence.targetWord,
       options: shuffledOptions,
       correctAnswer: correctAnswerIndex >= 0 ? correctAnswerIndex : 0,
-      explanation: sentence.explanation
+      explanation: sentence.explanation,
+      number: sentence.number
     }
   })
 }
@@ -869,7 +6484,8 @@ const chooseAnswer = (index: number) => {
 const testNextQuestion = () => {
   if (currentQuestionIndex.value < testQuestions.value.length - 1) {
     currentQuestionIndex.value++
-    selectedAnswer.value = userAnswers.value[currentQuestionIndex.value] || -1
+    const answer = userAnswers.value[currentQuestionIndex.value]
+    selectedAnswer.value = answer !== undefined && answer !== -1 ? answer : -1
     testShowResult.value = false
   }
 }
@@ -878,7 +6494,8 @@ const testNextQuestion = () => {
 const testPrevQuestion = () => {
   if (currentQuestionIndex.value > 0) {
     currentQuestionIndex.value--
-    selectedAnswer.value = userAnswers.value[currentQuestionIndex.value] || -1
+    const answer = userAnswers.value[currentQuestionIndex.value]
+    selectedAnswer.value = answer !== undefined && answer !== -1 ? answer : -1
     testShowResult.value = false
   }
 }
@@ -982,8 +6599,60 @@ const expandedCases = reactive({
   6: false
 } as Record<number, boolean>)
 
+// 变格规则页面分类类型
+type RulesCategory = 'noun' | 'adjective' | 'personal-pronoun' | 'possessive-pronoun' | 'other'
+
+// 变格规则页面当前选中的分类
+const selectedRulesCategory = ref<RulesCategory>('noun')
+
+// 变格规则页面滚动位置
+const rulesScrollPosition = ref(0)
+
+// 切换变格规则页面分类
+const selectRulesCategory = (category: RulesCategory) => {
+  selectedRulesCategory.value = category
+  // 切换分类时重置所有折叠状态
+  Object.keys(expandedCases).forEach(key => {
+    expandedCases[Number(key)] = false
+  })
+  selectedDesktopCase.value = null
+}
+
 // 电脑端当前选中的格
 const selectedDesktopCase = ref<number | null>(null)
+
+// 电脑端变格规则页面分类展开状态
+const desktopExpandedCategories = reactive({
+  noun: false,
+  adjective: false,
+  'personal-pronoun': false,
+  'possessive-pronoun': false,
+  other: false
+} as Record<string, boolean>)
+
+// 电脑端变格规则页面当前选中的分类
+const selectedDesktopCategory = ref<string | null>(null)
+
+// 切换电脑端分类展开状态
+const toggleDesktopCategory = (categoryId: string) => {
+  if (desktopExpandedCategories[categoryId]) {
+    desktopExpandedCategories[categoryId] = false
+    selectedDesktopCategory.value = null
+  } else {
+    Object.keys(desktopExpandedCategories).forEach(key => {
+      desktopExpandedCategories[key] = false
+    })
+    desktopExpandedCategories[categoryId] = true
+    selectedDesktopCategory.value = categoryId
+  }
+  selectedDesktopCase.value = null
+  nextTick(() => {
+    const rulesContent = document.querySelector('.rules-content') as HTMLElement
+    if (rulesContent) {
+      rulesContent.scrollTop = 0
+    }
+  })
+}
 
 // 切换变格规则折叠状态
 const toggleCaseExpansion = (caseNumber: number) => {
@@ -1049,6 +6718,867 @@ const backToCaseSelect = () => {
   usedPracticeSentences.value = [] // 返回到格选择时重置已使用的题目列表
   resetPracticeState()
 }
+
+// 选择性别（形容词和物主代词训练）
+const selectGender = (gender: string) => {
+  selectedGender.value = gender
+  adjPossTrainingState.value = 'practice'
+  // 根据训练类型加载相应的题目
+  if (currentAdjPossType.value === 'adjective') {
+    loadAdjectivePracticeSentence()
+  } else if (currentAdjPossType.value === 'possessive') {
+    loadPossessivePracticeSentence()
+  }
+}
+
+// 返回性别选择页面
+const backToGenderSelect = () => {
+  adjPossTrainingState.value = 'select-gender'
+  selectedGender.value = null
+  // 根据训练类型重置相应的状态
+  if (currentAdjPossType.value === 'adjective') {
+    resetAdjectivePracticeState()
+  } else if (currentAdjPossType.value === 'possessive') {
+    resetPossessivePracticeState()
+  }
+}
+
+// 重置形容词训练状态
+const resetAdjectivePracticeState = () => {
+  currentAdjectiveSentence.value = null
+  adjectiveSelectedEnding.value = ''
+  adjectiveShowDropdown.value = false
+  adjectiveAnswerResult.value = null
+  adjectiveShowResult.value = false
+  usedAdjectiveSentences.value = []
+}
+
+// 重置物主代词训练状态
+const resetPossessivePracticeState = () => {
+  currentAdjectiveSentence.value = null
+  adjectiveSelectedEnding.value = ''
+  adjectiveShowDropdown.value = false
+  adjectiveAnswerResult.value = null
+  adjectiveShowResult.value = false
+  usedPossessiveSentences.value = []
+  lastPossessiveWord.value = ''
+}
+
+// 加载形容词训练题目
+const loadAdjectivePracticeSentence = () => {
+  // 重置当前题目的状态
+  adjectiveSelectedEnding.value = ''
+  adjectiveShowDropdown.value = false
+  adjectiveAnswerResult.value = null
+  adjectiveShowResult.value = false
+  
+  // 过滤出符合当前性别和训练类型的题目
+  let availableSentences = adjectiveTrainingSentences.value.filter(sentence => {
+    if (selectedGender.value === '阳性/中性') {
+      return sentence.gender === '阳性' || sentence.gender === '中性'
+    }
+    return sentence.gender === selectedGender.value
+  })
+  
+  // 排除已经使用过的题目
+  availableSentences = availableSentences.filter(sentence => 
+    !usedAdjectiveSentences.value.includes(sentence.id)
+  )
+  
+  // 如果所有题目都用过了，重置已使用题目列表
+  if (availableSentences.length === 0) {
+    usedAdjectiveSentences.value = []
+    availableSentences = adjectiveTrainingSentences.value.filter(sentence => {
+      if (selectedGender.value === '阳性/中性') {
+        return sentence.gender === '阳性' || sentence.gender === '中性'
+      }
+      return sentence.gender === selectedGender.value
+    })
+  }
+  
+  // 随机选择一个题目
+  const randomIndex = Math.floor(Math.random() * availableSentences.length)
+  const selectedSentence = availableSentences[randomIndex]
+  if (selectedSentence) {
+    // 打乱答案选项顺序
+    const shuffledEndings = shuffleArray([...selectedSentence.possibleEndings])
+    
+    currentAdjectiveSentence.value = {
+      ...selectedSentence,
+      possibleEndings: shuffledEndings
+    }
+    
+    // 记录已使用的题目
+    usedAdjectiveSentences.value.push(selectedSentence.id)
+  }
+}
+
+// 加载物主代词训练题目（包含打乱顺序逻辑）
+const loadPossessivePracticeSentence = () => {
+  // 重置当前题目的状态
+  adjectiveSelectedEnding.value = ''
+  adjectiveShowDropdown.value = false
+  adjectiveAnswerResult.value = null
+  adjectiveShowResult.value = false
+  
+  // 过滤出符合当前性别的题目
+  let availableSentences = possessiveTrainingSentences.value.filter(sentence => {
+    if (selectedGender.value === '阳性/中性') {
+      return sentence.gender === '阳性' || sentence.gender === '中性'
+    }
+    return sentence.gender === selectedGender.value
+  })
+  
+  // 排除已经使用过的题目
+  availableSentences = availableSentences.filter(sentence => 
+    !usedPossessiveSentences.value.includes(sentence.id)
+  )
+  
+  // 如果所有题目都用过了，重置已使用题目列表
+  if (availableSentences.length === 0) {
+    usedPossessiveSentences.value = []
+    availableSentences = possessiveTrainingSentences.value.filter(sentence => {
+      if (selectedGender.value === '阳性/中性') {
+        return sentence.gender === '阳性' || sentence.gender === '中性'
+      }
+      return sentence.gender === selectedGender.value
+    })
+  }
+  
+  // 过滤掉与上一个物主代词相同的题目（至少隔2道题）
+  if (lastPossessiveWord.value) {
+    const filteredSentences = availableSentences.filter(sentence => {
+      const currentWord = sentence.targetWord.toLowerCase()
+      const lastWord = lastPossessiveWord.value.toLowerCase()
+      return currentWord !== lastWord
+    })
+    
+    // 如果过滤后还有题目，使用过滤后的；否则使用原来的
+    if (filteredSentences.length > 0) {
+      availableSentences = filteredSentences
+    }
+  }
+  
+  // 随机选择一个题目
+  const randomIndex = Math.floor(Math.random() * availableSentences.length)
+  const selectedSentence = availableSentences[randomIndex]
+  if (selectedSentence) {
+    // 打乱答案选项顺序
+    const shuffledEndings = shuffleArray([...selectedSentence.possibleEndings])
+    
+    currentAdjectiveSentence.value = {
+      ...selectedSentence,
+      possibleEndings: shuffledEndings
+    }
+    
+    // 记录已使用的题目和上一个物主代词
+    usedPossessiveSentences.value.push(selectedSentence.id)
+    lastPossessiveWord.value = selectedSentence.targetWord
+  }
+}
+
+// 处理形容词训练句子点击
+const handleAdjectiveSentenceClick = (event: MouseEvent) => {
+  if (!currentAdjectiveSentence.value) return
+  
+  const target = event.target as HTMLElement
+  if (target.classList.contains('target-word') || target.closest('.target-word')) {
+    const clickableTarget = target.classList.contains('target-word') 
+      ? target 
+      : target.closest('.target-word') as HTMLElement
+    adjectiveShowDropdown.value = !adjectiveShowDropdown.value
+    if (adjectiveShowDropdown.value) {
+      const rect = clickableTarget.getBoundingClientRect()
+      adjectiveDropdownTop.value = rect.bottom + 5
+      adjectiveDropdownLeft.value = rect.left
+    }
+  }
+}
+
+// 选择形容词词尾
+const chooseAdjectiveEnding = (ending: string) => {
+  if (!currentAdjectiveSentence.value) return
+  
+  adjectiveSelectedEnding.value = ending
+  adjectiveShowDropdown.value = false
+  
+  // 检查答案
+  if (ending === currentAdjectiveSentence.value.correctEnding) {
+    adjectiveAnswerResult.value = 'correct'
+  } else {
+    adjectiveAnswerResult.value = 'incorrect'
+  }
+  adjectiveShowResult.value = true
+}
+
+// 形容词/物主代词训练下一题
+const adjectiveNextQuestion = () => {
+  // 根据训练类型加载相应的题目
+  if (currentAdjPossType.value === 'adjective') {
+    loadAdjectivePracticeSentence()
+  } else if (currentAdjPossType.value === 'possessive') {
+    loadPossessivePracticeSentence()
+  }
+}
+
+// 生成形容词/物主代词训练句子的HTML
+const adjectiveFullSentenceHtml = computed(() => {
+  if (!currentAdjectiveSentence.value) return ''
+  
+  const sentence = currentAdjectiveSentence.value
+  const targetWord = sentence.targetWord
+  
+  // 生成带标红的目标词（仅在未选择词尾时显示）
+  let targetWordWithRedEnding = targetWord
+  
+  if (!adjectiveSelectedEnding.value) {
+    if (currentAdjPossType.value === 'adjective') {
+      // 形容词标红逻辑（阳性/中性：ый, ой, ий；阴性：ая, яя；复数：ые, ие）
+      const endings = ['ый', 'ой', 'ий', 'ая', 'яя', 'ые', 'ие']
+      let foundEnding = ''
+      
+      // 查找匹配的词尾
+      for (const ending of endings) {
+        if (targetWord.endsWith(ending)) {
+          foundEnding = ending
+          break
+        }
+      }
+      
+      // 如果找到词尾，标红显示
+      if (foundEnding) {
+        const base = targetWord.slice(0, -foundEnding.length)
+        targetWordWithRedEnding = `${base}<span class="red-ending">${foundEnding}</span>`
+      }
+    } else if (currentAdjPossType.value === 'possessive') {
+      // 物主代词标红逻辑
+      // 检查是否是"весь"、"чей"及其变体
+      const specialWords = ['весь', 'Весь', 'всё', 'Всё', 'чей', 'Чей', 'чьё', 'Чьё']
+      if (specialWords.includes(targetWord)) {
+        // 特殊词不标红
+        targetWordWithRedEnding = targetWord
+      } else {
+        // 标红末尾元音字母或"й"
+        const vowelsAndY = 'аеёиоуыэюяАЕЁИОУЫЭЮЯйЙ'
+        const lastChar = targetWord[targetWord.length - 1]
+        
+        if (lastChar && vowelsAndY.includes(lastChar)) {
+          // 标红末尾元音或"й"
+          const base = targetWord.slice(0, -1)
+          targetWordWithRedEnding = `${base}<span class="red-ending">${lastChar}</span>`
+        }
+        // 辅音结尾不标红
+      }
+    }
+  } else if (adjectiveSelectedEnding.value === '/') {
+    // 如果选择了 "/"，显示原始词（不变格）
+    targetWordWithRedEnding = targetWord
+  } else {
+    // 如果已选择词尾，显示选择的词尾
+    let base = targetWord
+    
+    if (currentAdjPossType.value === 'adjective') {
+      // 形容词：移除原始词尾
+      const endings = ['ый', 'ой', 'ий', 'ая', 'яя', 'ые', 'ие']
+      for (const ending of endings) {
+        if (targetWord.endsWith(ending)) {
+          base = targetWord.slice(0, -ending.length)
+          break
+        }
+      }
+      // 显示带标红的选择词尾
+      targetWordWithRedEnding = `${base}<span class="red-ending">${adjectiveSelectedEnding.value}</span>`
+    } else if (currentAdjPossType.value === 'possessive') {
+      // 物主代词：检查是否是"весь"、"чей"及其变体
+      const specialWords = ['весь', 'Весь', 'всё', 'Всё', 'чей', 'Чей', 'чьё', 'Чьё']
+      if (specialWords.includes(targetWord)) {
+        // 特殊词：直接显示完整单词
+        targetWordWithRedEnding = adjectiveSelectedEnding.value
+      } else {
+        // 不是特殊词：检查词尾类型
+        const vowelsAndY = 'аеёиоуыэюяАЕЁИОУЫЭЮЯйЙ'
+        const lastChar = targetWord[targetWord.length - 1]
+        if (lastChar && vowelsAndY.includes(lastChar)) {
+          // 元音或"й"结尾：移除末尾字符，替换词尾
+          base = targetWord.slice(0, -1)
+        }
+        // 辅音结尾：不移除末尾字符，直接添加词尾
+        // 显示带标红的选择词尾
+        targetWordWithRedEnding = `${base}<span class="red-ending">${adjectiveSelectedEnding.value}</span>`
+      }
+    }
+  }
+  
+  return sentence.text.replace(targetWord, `<span class="target-word">${targetWordWithRedEnding}</span>`)
+})
+
+// 选择人称（人称代词训练）
+const selectPerson = (person: string) => {
+  selectedPerson.value = person
+  pronounTrainingState.value = 'practice'
+  loadPersonalPronounPracticeSentence()
+}
+
+// 返回人称选择页面
+const backToPersonSelect = () => {
+  pronounTrainingState.value = 'select-person'
+  selectedPerson.value = null
+  resetPersonalPronounPracticeState()
+}
+
+// 重置人称代词训练状态
+const resetPersonalPronounPracticeState = () => {
+  currentPersonalPronounSentence.value = null
+  personalPronounSelectedEnding.value = ''
+  personalPronounShowDropdown.value = false
+  personalPronounAnswerResult.value = null
+  personalPronounShowResult.value = false
+  usedPersonalPronounSentences.value = []
+}
+
+// 加载人称代词训练题目
+const loadPersonalPronounPracticeSentence = () => {
+  // 重置当前题目的状态
+  personalPronounSelectedEnding.value = ''
+  personalPronounShowDropdown.value = false
+  personalPronounAnswerResult.value = null
+  personalPronounShowResult.value = false
+  
+  // 过滤出符合当前人称的题目
+  let availableSentences = personalPronounTrainingSentences.value.filter(sentence => {
+    return sentence.gender === (selectedPerson.value === '单数人称' ? '单数' : '复数')
+  })
+  
+  // 排除已经使用过的题目
+  availableSentences = availableSentences.filter(sentence => 
+    !usedPersonalPronounSentences.value.includes(sentence.id)
+  )
+  
+  // 如果所有题目都用过了，重置已使用题目列表
+  if (availableSentences.length === 0) {
+    usedPersonalPronounSentences.value = []
+    availableSentences = personalPronounTrainingSentences.value.filter(sentence => {
+      return sentence.gender === (selectedPerson.value === '单数人称' ? '单数' : '复数')
+    })
+  }
+  
+  // 随机选择一个题目
+  const randomIndex = Math.floor(Math.random() * availableSentences.length)
+  const selectedSentence = availableSentences[randomIndex]
+  if (selectedSentence) {
+    // 打乱答案选项顺序
+    const shuffledEndings = shuffleArray([...selectedSentence.possibleEndings])
+    
+    currentPersonalPronounSentence.value = {
+      ...selectedSentence,
+      possibleEndings: shuffledEndings
+    }
+    
+    // 记录已使用的题目
+    usedPersonalPronounSentences.value.push(selectedSentence.id)
+  }
+}
+
+// 处理人称代词训练句子点击
+const handlePersonalPronounSentenceClick = (event: MouseEvent) => {
+  if (!currentPersonalPronounSentence.value) return
+  
+  const target = event.target as HTMLElement
+  if (target.classList.contains('target-word') || target.closest('.target-word')) {
+    const clickableTarget = target.classList.contains('target-word') 
+      ? target 
+      : target.closest('.target-word') as HTMLElement
+    personalPronounShowDropdown.value = !personalPronounShowDropdown.value
+    if (personalPronounShowDropdown.value) {
+      const rect = clickableTarget.getBoundingClientRect()
+      adjectiveDropdownTop.value = rect.bottom + 5
+      adjectiveDropdownLeft.value = rect.left
+    }
+  }
+}
+
+// 选择人称代词词尾
+const choosePersonalPronounEnding = (ending: string) => {
+  if (!currentPersonalPronounSentence.value) return
+  
+  personalPronounSelectedEnding.value = ending
+  personalPronounShowDropdown.value = false
+  
+  // 检查答案
+  if (ending === currentPersonalPronounSentence.value.correctEnding) {
+    personalPronounAnswerResult.value = 'correct'
+  } else {
+    personalPronounAnswerResult.value = 'incorrect'
+  }
+  personalPronounShowResult.value = true
+}
+
+// 人称代词训练下一题
+const personalPronounNextQuestion = () => {
+  loadPersonalPronounPracticeSentence()
+}
+
+// 生成形容词选项（基于正确答案生成一些变体）
+const generateAdjectiveOptions = (correctAdj: string, targetAdj: string, caseNum: number, number: string): string[] => {
+  const options = [correctAdj, targetAdj]
+  
+  // 根据格和数生成一些常见的变体
+  const adjEndings: Record<string, Record<string, string[]>> = {
+    '阳性': {
+      '1': ['ый', 'ий', 'ой'],
+      '2': ['ого', 'его'],
+      '3': ['ому', 'ему'],
+      '4': ['ый', 'ий', 'ой', 'ого', 'его'],
+      '5': ['ым', 'им'],
+      '6': ['ом', 'ем']
+    },
+    '阴性': {
+      '1': ['ая', 'яя'],
+      '2': ['ой', 'ей'],
+      '3': ['ой', 'ей'],
+      '4': ['ую', 'юю'],
+      '5': ['ой', 'ей'],
+      '6': ['ой', 'ей']
+    },
+    '中性': {
+      '1': ['ое', 'ее'],
+      '2': ['ого', 'его'],
+      '3': ['ому', 'ему'],
+      '4': ['ое', 'ее'],
+      '5': ['ым', 'им'],
+      '6': ['ом', 'ем']
+    }
+  }
+  
+  // 复数形式
+  const pluralEndings: Record<string, string[]> = {
+    '1': ['ые', 'ие'],
+    '2': ['ых', 'их'],
+    '3': ['ым', 'им'],
+    '4': ['ые', 'их'],
+    '5': ['ыми', 'ими'],
+    '6': ['ых', 'их']
+  }
+  
+  // 尝试从targetAdj提取词干并生成变体
+  const base = targetAdj.replace(/(ый|ий|ой|ая|яя|ое|ее|ые|ие)$/g, '')
+  
+  if (number === '复数') {
+    const endings = pluralEndings[caseNum.toString()] || ['ые', 'их']
+    endings.forEach(ending => {
+      if (!options.includes(base + ending)) {
+        options.push(base + ending)
+      }
+    })
+  } else {
+    // 单数 - 尝试判断性
+    let gender = '阳性'
+    if (targetAdj.endsWith('ая') || targetAdj.endsWith('яя')) gender = '阴性'
+    else if (targetAdj.endsWith('ое') || targetAdj.endsWith('ее')) gender = '中性'
+    
+    const genderEndings = adjEndings[gender]
+    const caseEndings = genderEndings ? genderEndings[caseNum.toString()] : undefined
+    const endings = caseEndings || ['ый', 'ого']
+    endings.forEach(ending => {
+      if (!options.includes(base + ending)) {
+        options.push(base + ending)
+      }
+    })
+  }
+  
+  // 确保至少有3个选项
+  while (options.length < 3) {
+    options.push(targetAdj)
+  }
+  
+  // 随机打乱选项顺序，避免正确答案总是第一个
+  return options.slice(0, 4).sort(() => Math.random() - 0.5)
+}
+
+// 生成名词选项（基于正确答案生成一些变体）
+const generateNounOptions = (correctNoun: string, targetNoun: string, _caseNum: number, _number: string): string[] => {
+  const options = [correctNoun, targetNoun]
+  
+  // 根据格和数生成一些常见的变体
+  // 这里简化处理，添加一些常见的变格形式
+  const commonEndings = ['а', 'ы', 'е', 'у', 'ой', 'е', 'ов', 'ам', 'ами', 'ах']
+  
+  // 尝试从targetNoun提取词干
+  const base = targetNoun.replace(/(а|я|о|е|и|ы|ов|ев|ей)$/g, '')
+  
+  commonEndings.forEach(ending => {
+    const variant = base + ending
+    if (!options.includes(variant) && variant !== targetNoun) {
+      options.push(variant)
+    }
+  })
+  
+  // 确保至少有3个选项
+  while (options.length < 3) {
+    options.push(targetNoun)
+  }
+  
+  // 随机打乱选项顺序，避免正确答案总是第一个
+  return options.slice(0, 4).sort(() => Math.random() - 0.5)
+}
+
+// 加载形容词+名词组合训练题目
+const loadAdjNounCombinedSentence = () => {
+  // 重置当前题目的状态
+  adjNounSelectedAdjective.value = ''
+  adjNounSelectedNoun.value = ''
+  adjNounShowDropdown.value = null
+  adjNounShowResult.value = false
+  adjNounAnswerResult.value = null
+  
+  // 获取未使用过的题目
+  let availableSentences = adjNounCombinedSentences.value.filter(sentence => 
+    !usedAdjNounSentences.value.includes(sentence.id)
+  )
+  
+  // 如果所有题目都已使用，重置已使用列表
+  if (availableSentences.length === 0) {
+    usedAdjNounSentences.value = []
+    availableSentences = adjNounCombinedSentences.value
+  }
+  
+  // 随机选择一道题目
+  const randomIndex = Math.floor(Math.random() * availableSentences.length)
+  const sentence = availableSentences[randomIndex]
+  
+  if (!sentence) return
+  
+  // 解析正确答案中的形容词和名词
+  const correctParts = sentence.correctAnswer.split(' ')
+  const correctAdjective = correctParts[0]
+  const correctNoun = correctParts.slice(1).join(' ')
+  
+  // 解析目标词中的形容词和名词
+  const targetParts = sentence.targetWord.split(' ')
+  const targetAdjective = targetParts[0]
+  const targetNoun = targetParts.slice(1).join(' ')
+  
+  // 动态生成选项
+  currentAdjNounSentence.value = {
+    ...sentence,
+    correctAdjective: correctAdjective || '',
+    correctNoun: correctNoun || '',
+    targetAdjective: targetAdjective || '',
+    targetNoun: targetNoun || '',
+    adjectiveOptions: generateAdjectiveOptions(correctAdjective || '', targetAdjective || '', sentence.case, sentence.number),
+    nounOptions: generateNounOptions(correctNoun || '', targetNoun || '', sentence.case, sentence.number)
+  }
+}
+
+// 处理形容词点击
+const handleAdjectiveClick = (event: MouseEvent) => {
+  const rect = (event.target as HTMLElement).getBoundingClientRect()
+  adjNounDropdownTop.value = rect.bottom + window.scrollY
+  adjNounDropdownLeft.value = rect.left + window.scrollX
+  adjNounShowDropdown.value = 'adjective'
+}
+
+// 处理名词点击
+const handleNounClick = (event: MouseEvent) => {
+  const rect = (event.target as HTMLElement).getBoundingClientRect()
+  adjNounDropdownTop.value = rect.bottom + window.scrollY
+  adjNounDropdownLeft.value = rect.left + window.scrollX
+  adjNounShowDropdown.value = 'noun'
+}
+
+// 选择形容词
+const chooseAdjective = (option: string) => {
+  adjNounSelectedAdjective.value = option
+  adjNounShowDropdown.value = null
+}
+
+// 选择名词
+const chooseNoun = (option: string) => {
+  adjNounSelectedNoun.value = option
+  adjNounShowDropdown.value = null
+}
+
+// 检查形容词+名词组合训练答案
+const checkAdjNounAnswer = () => {
+  if (!currentAdjNounSentence.value) return
+  
+  const userAdj = adjNounSelectedAdjective.value.trim().toLowerCase()
+  const userNoun = adjNounSelectedNoun.value.trim().toLowerCase()
+  
+  const correctAdjective = currentAdjNounSentence.value.correctAdjective.toLowerCase()
+  const correctNoun = currentAdjNounSentence.value.correctNoun.toLowerCase()
+  
+  if (userAdj === correctAdjective && userNoun === correctNoun) {
+    adjNounAnswerResult.value = 'correct'
+  } else {
+    adjNounAnswerResult.value = 'incorrect'
+  }
+  
+  adjNounShowResult.value = true
+  
+  // 记录已使用的题目
+  if (!usedAdjNounSentences.value.includes(currentAdjNounSentence.value.id)) {
+    usedAdjNounSentences.value.push(currentAdjNounSentence.value.id)
+  }
+}
+
+// 形容词+名词组合训练下一题
+const adjNounNextQuestion = () => {
+  loadAdjNounCombinedSentence()
+}
+
+// 将句子拆分为文本、形容词和名词三部分
+const getAdjNounSentenceParts = computed(() => {
+  if (!currentAdjNounSentence.value) return []
+  
+  const sentence = currentAdjNounSentence.value
+  
+  // 使用动态生成的targetAdjective和targetNoun
+  const adjective = sentence.targetAdjective || sentence.targetWord.split(' ')[0]
+  const noun = sentence.targetNoun || sentence.targetWord.split(' ').slice(1).join(' ')
+  
+  // 将句子拆分为三部分：形容词前的文本、形容词、形容词和名词之间的文本、名词、名词后的文本
+  const adjIndex = sentence.text.indexOf(adjective)
+  const nounIndex = sentence.text.indexOf(noun)
+  
+  const result = []
+  
+  // 形容词前的文本
+  if (adjIndex > 0) {
+    result.push({ type: 'text', content: sentence.text.substring(0, adjIndex) })
+  }
+  
+  // 形容词
+  result.push({ type: 'adjective', content: adjective })
+  
+  // 形容词和名词之间的文本
+  const betweenText = sentence.text.substring(adjIndex + adjective.length, nounIndex)
+  if (betweenText) {
+    result.push({ type: 'text', content: betweenText })
+  }
+  
+  // 名词
+  result.push({ type: 'noun', content: noun })
+  
+  // 名词后的文本
+  const afterNounText = sentence.text.substring(nounIndex + noun.length)
+  if (afterNounText) {
+    result.push({ type: 'text', content: afterNounText })
+  }
+  
+  return result
+})
+
+// 加载物主代词+名词组合训练题目
+const loadPossNounCombinedSentence = () => {
+  // 重置当前题目的状态
+  possNounSelectedPronoun.value = ''
+  possNounSelectedNoun.value = ''
+  possNounShowDropdown.value = null
+  possNounShowResult.value = false
+  possNounAnswerResult.value = null
+  
+  // 获取未使用过的题目
+  let availableSentences = possNounCombinedSentences.value.filter(sentence => 
+    !usedPossNounSentences.value.includes(sentence.id)
+  )
+  
+  // 如果所有题目都已使用，重置已使用列表
+  if (availableSentences.length === 0) {
+    usedPossNounSentences.value = []
+    availableSentences = possNounCombinedSentences.value
+  }
+  
+  // 随机选择一道题目
+  const randomIndex = Math.floor(Math.random() * availableSentences.length)
+  const sentence = availableSentences[randomIndex]
+  
+  if (!sentence) return
+  
+  // 解析正确答案中的物主代词和名词
+  const correctParts = sentence.correctAnswer.split(' ')
+  const correctPronoun = correctParts[0]
+  const correctNoun = correctParts.slice(1).join(' ')
+  
+  // 解析目标词中的物主代词和名词
+  const targetParts = sentence.targetWord.split(' ')
+  const targetPronoun = targetParts[0]
+  const targetNoun = targetParts.slice(1).join(' ')
+  
+  // 动态生成选项
+  currentPossNounSentence.value = {
+    ...sentence,
+    correctPronoun: correctPronoun || '',
+    correctNoun: correctNoun || '',
+    targetPronoun: targetPronoun || '',
+    targetNoun: targetNoun || '',
+    pronounOptions: generatePronounOptions(correctPronoun || '', targetPronoun || '', sentence.case, sentence.number),
+    nounOptions: generateNounOptions(correctNoun || '', targetNoun || '', sentence.case, sentence.number)
+  }
+}
+
+// 处理物主代词点击
+const handlePronounClick = (event: MouseEvent) => {
+  const rect = (event.target as HTMLElement).getBoundingClientRect()
+  possNounDropdownTop.value = rect.bottom + window.scrollY
+  possNounDropdownLeft.value = rect.left + window.scrollX
+  possNounShowDropdown.value = 'pronoun'
+}
+
+// 处理名词点击（物主代词+名词训练）
+const handlePossNounClick = (event: MouseEvent) => {
+  const rect = (event.target as HTMLElement).getBoundingClientRect()
+  possNounDropdownTop.value = rect.bottom + window.scrollY
+  possNounDropdownLeft.value = rect.left + window.scrollX
+  possNounShowDropdown.value = 'noun'
+}
+
+// 选择物主代词
+const choosePronoun = (option: string) => {
+  possNounSelectedPronoun.value = option
+  possNounShowDropdown.value = null
+}
+
+// 选择名词（物主代词+名词训练）
+const choosePossNoun = (option: string) => {
+  possNounSelectedNoun.value = option
+  possNounShowDropdown.value = null
+}
+
+// 生成物主代词选项
+const generatePronounOptions = (correctPronoun: string, targetPronoun: string, _caseNum: number, _number: string) => {
+  const options = [correctPronoun]
+  
+  // 添加一些干扰项（基于目标词的变化形式）
+  const distractors = getPronounDistractors(targetPronoun, correctPronoun)
+  
+  // 添加干扰项，直到有4个选项
+  for (const distractor of distractors) {
+    if (options.length >= 4) break
+    if (!options.includes(distractor)) {
+      options.push(distractor)
+    }
+  }
+  
+  // 如果选项不足4个，添加一些通用干扰项
+  const commonDistractors = ['мой', 'твой', 'его', 'её', 'наш', 'ваш', 'их', 'свой']
+  for (const distractor of commonDistractors) {
+    if (options.length >= 4) break
+    if (!options.includes(distractor)) {
+      options.push(distractor)
+    }
+  }
+  
+  // 随机打乱选项顺序
+  return options.sort(() => Math.random() - 0.5)
+}
+
+// 获取物主代词干扰项
+const getPronounDistractors = (targetPronoun: string, correctPronoun: string): string[] => {
+  const distractorMap: Record<string, string[]> = {
+    'мой': ['моя', 'моё', 'мои', 'моего', 'моему', 'моим', 'моей', 'мою', 'моих', 'моими'],
+    'твой': ['твоя', 'твоё', 'твои', 'твоего', 'твоему', 'твоим', 'твоей', 'твою', 'твоих', 'твоими'],
+    'его': ['его', 'ему', 'им', 'него', 'нему', 'ним'],
+    'её': ['её', 'ей', 'ею', 'неё', 'ней', 'нею'],
+    'наш': ['наша', 'наше', 'наши', 'нашего', 'нашему', 'нашим', 'нашей', 'нашу', 'наших', 'нашими'],
+    'ваш': ['ваша', 'ваше', 'ваши', 'вашего', 'вашему', 'вашим', 'вашей', 'вашу', 'ваших', 'вашими'],
+    'их': ['их', 'им', 'ими', 'них', 'ним', 'ними'],
+    'свой': ['своя', 'своё', 'свои', 'своего', 'своему', 'своим', 'своей', 'свою', 'своих', 'своими']
+  }
+  
+  const distractors = distractorMap[targetPronoun] || []
+  return distractors.filter(d => d !== correctPronoun)
+}
+
+// 检查物主代词+名词组合训练答案
+const checkPossNounAnswer = () => {
+  if (!currentPossNounSentence.value) return
+  
+  const userPronoun = possNounSelectedPronoun.value.trim().toLowerCase()
+  const userNoun = possNounSelectedNoun.value.trim().toLowerCase()
+  
+  const correctPronoun = currentPossNounSentence.value.correctPronoun.toLowerCase()
+  const correctNoun = currentPossNounSentence.value.correctNoun.toLowerCase()
+  
+  if (userPronoun === correctPronoun && userNoun === correctNoun) {
+    possNounAnswerResult.value = 'correct'
+  } else {
+    possNounAnswerResult.value = 'incorrect'
+  }
+  
+  possNounShowResult.value = true
+  
+  // 记录已使用的题目
+  if (!usedPossNounSentences.value.includes(currentPossNounSentence.value.id)) {
+    usedPossNounSentences.value.push(currentPossNounSentence.value.id)
+  }
+}
+
+// 物主代词+名词组合训练下一题
+const possNounNextQuestion = () => {
+  loadPossNounCombinedSentence()
+}
+
+// 将句子拆分为文本、物主代词和名词三部分
+const getPossNounSentenceParts = computed(() => {
+  if (!currentPossNounSentence.value) return []
+  
+  const sentence = currentPossNounSentence.value
+  
+  // 使用动态生成的targetPronoun和targetNoun
+  const pronoun = sentence.targetPronoun || sentence.targetWord.split(' ')[0]
+  const noun = sentence.targetNoun || sentence.targetWord.split(' ').slice(1).join(' ')
+  
+  // 将句子拆分为三部分：物主代词前的文本、物主代词、物主代词和名词之间的文本、名词、名词后的文本
+  const pronounIndex = sentence.text.indexOf(pronoun)
+  const nounIndex = sentence.text.indexOf(noun)
+  
+  const result = []
+  
+  // 物主代词前的文本
+  if (pronounIndex > 0) {
+    result.push({ type: 'text', content: sentence.text.substring(0, pronounIndex) })
+  }
+  
+  // 物主代词
+  result.push({ type: 'pronoun', content: pronoun })
+  
+  // 物主代词和名词之间的文本
+  const betweenText = sentence.text.substring(pronounIndex + pronoun.length, nounIndex)
+  if (betweenText) {
+    result.push({ type: 'text', content: betweenText })
+  }
+  
+  // 名词
+  result.push({ type: 'noun', content: noun })
+  
+  // 名词后的文本
+  const afterNounText = sentence.text.substring(nounIndex + noun.length)
+  if (afterNounText) {
+    result.push({ type: 'text', content: afterNounText })
+  }
+  
+  return result
+})
+
+// 生成人称代词训练句子的HTML
+const personalPronounFullSentenceHtml = computed(() => {
+  if (!currentPersonalPronounSentence.value) return ''
+  
+  const sentence = currentPersonalPronounSentence.value
+  const targetWord = sentence.targetWord
+  
+  let displayWord = targetWord
+  
+  // 如果已选择词尾，显示选择的完整单词
+  if (personalPronounSelectedEnding.value) {
+    displayWord = personalPronounSelectedEnding.value
+  }
+  
+  // 使用正则表达式精确匹配独立的单词（前后有空格或标点符号）
+  const regex = new RegExp(`(^|\\s|\\(|\\[|\\{)(${targetWord})($|\\s|\\.|,|;|:|\\?|!|\\)|\\]|\\})`, 'g')
+  return sentence.text.replace(regex, `$1<span class="target-word">${displayWord}</span>$3`)
+})
 
 // 重置实战训练状态
 const resetPracticeState = () => {
@@ -4281,18 +10811,95 @@ const handleClickOutside = (event: MouseEvent) => {
   if (!isClickOnTargetWord && !isClickOnDropdown) {
     showDropdown.value = false
   }
+  
+  // 同时处理形容词训练的下拉菜单
+  const isClickOnAdjectiveTarget = target.closest('.target-word')
+  if (!isClickOnAdjectiveTarget && !isClickOnDropdown) {
+    adjectiveShowDropdown.value = false
+  }
+  
+  // 处理形容词+名词组合训练的下拉菜单
+  const isClickOnAdjNounTarget = target.closest('.sentence-container .target-word')
+  if (!isClickOnAdjNounTarget && !isClickOnDropdown) {
+    adjNounShowDropdown.value = null
+  }
+  
+  // 处理物主代词+名词组合训练的下拉菜单
+  if (!isClickOnAdjNounTarget && !isClickOnDropdown) {
+    possNounShowDropdown.value = null
+  }
+  
+  // 处理人称代词训练的下拉菜单
+  if (!isClickOnAdjectiveTarget && !isClickOnDropdown) {
+    personalPronounShowDropdown.value = false
+  }
 }
 
 // 组件挂载时添加点击事件监听器
+// 浏览器历史记录导航处理
+const handlePopState = (event: PopStateEvent) => {
+  if (event.state && event.state.page) {
+    const targetPage = event.state.page
+    const targetIndex = navigationHistory.value.indexOf(targetPage)
+    
+    if (targetIndex !== -1) {
+      historyIndex.value = targetIndex
+      currentPage.value = targetPage
+    }
+  }
+}
+
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  
+  // 添加浏览器历史记录监听
+  window.addEventListener('popstate', handlePopState)
+  
+  // 初始化浏览器历史记录
+  window.history.replaceState({ page: 'home' }, '', '#home')
 })
 
 // 组件卸载时移除点击事件监听器
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
   stopTimer()
+  
+  // 移除浏览器历史记录监听
+  window.removeEventListener('popstate', handlePopState)
 })
+
+// 标题字母颜色切换函数
+const toggleLetterColor = (event: MouseEvent) => {
+  const target = event.target as HTMLElement
+  
+  // 检查是否已经激活
+  const isActive = target.classList.contains('active')
+  
+  if (isActive) {
+    // 恢复默认状态
+    target.classList.remove('active')
+    if (target.classList.contains('blue-section')) {
+      target.style.color = '#000000'
+    } else if (target.classList.contains('red-section')) {
+      target.style.color = '#000000'
+    }
+    // 显示下划线
+    const afterElement = window.getComputedStyle(target, '::after')
+    if (afterElement.content !== 'none') {
+      target.style.setProperty('--after-opacity', '1')
+    }
+  } else {
+    // 激活状态
+    target.classList.add('active')
+    if (target.classList.contains('blue-section')) {
+      target.style.color = '#3498db'
+    } else if (target.classList.contains('red-section')) {
+      target.style.color = '#e74c3c'
+    }
+    // 隐藏下划线
+    target.style.setProperty('--after-opacity', '0')
+  }
+}
 
 // 下一题
 const nextQuestion = () => {
@@ -4333,20 +10940,124 @@ const shufflePossibleEndings = (sentence: any) => {
       </div>
     </div>
 
+    <!-- 移动端侧边栏 -->
+    <div 
+      class="mobile-sidebar-overlay" 
+      :class="{ 'overlay-visible': mobileSidebarOpen }"
+      @click="closeMobileSidebar"
+    ></div>
+    <aside 
+      class="mobile-sidebar" 
+      :class="{ 'sidebar-open': mobileSidebarOpen }"
+    >
+      <div class="mobile-sidebar-header">
+        <h3>菜单</h3>
+        <button class="mobile-sidebar-close" @click="closeMobileSidebar">
+          <span>×</span>
+        </button>
+      </div>
+      <nav class="mobile-sidebar-nav">
+        <button 
+          class="mobile-sidebar-btn" 
+          :class="{ active: currentPage === 'home' }"
+          @click="navigateToFromSidebar('home')"
+        >
+          <HomeFilled class="mobile-sidebar-icon" />
+          <span>主页</span>
+        </button>
+        <button 
+          class="mobile-sidebar-btn" 
+          :class="{ active: currentPage === 'declension-rules' }"
+          @click="navigateToFromSidebar('declension-rules')"
+        >
+          <Document class="mobile-sidebar-icon" />
+          <span>变格规则</span>
+        </button>
+        <button 
+          class="mobile-sidebar-btn" 
+          :class="{ active: currentPage === 'profile' }"
+          @click="navigateToFromSidebar('profile')"
+        >
+          <Clock class="mobile-sidebar-icon" />
+          <span>测试历史</span>
+        </button>
+      </nav>
+    </aside>
+
     <!-- 头部栏 -->
     <header class="header">
-      <h1 class="main-title">СКЛОНЕНИЕ</h1>
-      <p class="sub-title">俄语变格训练网站</p>
+      <button class="mobile-menu-btn mobile-only" @click="openMobileSidebar">
+        <div class="menu-icon">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </button>
+      <h1 class="main-title" @click="navigateTo('home')">
+        <span class="tech-letter blue-section" data-letter="С" @mouseover="toggleLetterColor($event)">С</span>
+        <span class="tech-letter blue-section" data-letter="К" @mouseover="toggleLetterColor($event)">К</span>
+        <span class="tech-letter blue-section" data-letter="Л" @mouseover="toggleLetterColor($event)">Л</span>
+        <span class="tech-letter blue-section" data-letter="О" @mouseover="toggleLetterColor($event)">О</span>
+        <span class="tech-letter blue-section" data-letter="Н" @mouseover="toggleLetterColor($event)">Н</span>
+        <span class="tech-letter blue-section" data-letter="Е" @mouseover="toggleLetterColor($event)">Е</span>
+        <span class="tech-letter blue-section" data-letter="Н" @mouseover="toggleLetterColor($event)">Н</span>
+        <span class="tech-letter red-section" data-letter="И" @mouseover="toggleLetterColor($event)">И</span>
+        <span class="tech-letter red-section" data-letter="Е" @mouseover="toggleLetterColor($event)">Е</span>
+      </h1>
+      <nav class="header-nav desktop-only">
+        <button 
+          class="header-nav-btn" 
+          :class="{ active: currentPage === 'home' }"
+          @click="navigateTo('home')"
+        >
+          主页
+        </button>
+        <button 
+          class="header-nav-btn" 
+          :class="{ active: currentPage === 'declension-rules' }"
+          @click="navigateTo('declension-rules')"
+        >
+          变格规则
+        </button>
+        <button 
+          class="header-nav-btn" 
+          :class="{ active: currentPage === 'profile' }"
+          @click="navigateTo('profile')"
+        >
+          测试历史
+        </button>
+      </nav>
     </header>
 
     <!-- 内容区 -->
     <main class="content">
       <div v-if="currentPage === 'home'" class="home-content">
+        <div class="welcome-message">
+          欢迎来到俄语变格训练网站 Склонение，点击下方的按钮即可开始训练。
+        </div>
+        <button class="training-btn" @click="navigateTo('adj-training')">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <span class="btn-text">形容词训练</span>
+        </button>
+        <button class="training-btn" @click="navigateTo('pronoun-training')">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          <span class="btn-text">人称代词训练</span>
+        </button>
+        <button class="training-btn" @click="navigateTo('poss-training')">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          <span class="btn-text">物主代词训练</span>
+        </button>
         <button class="training-btn" @click="navigateTo('case-training')">
-          指定格训练
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
+          <span class="btn-text">名词训练</span>
+        </button>
+        <button class="training-btn" @click="navigateTo('combined-training')">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          <span class="btn-text">组合训练</span>
         </button>
         <button class="training-btn" @click="navigateTo('test')">
-          测试
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><circle cx="12" cy="12" r="10"></circle><polyline points="16 11.37 12 7.37 8 11.37"></polyline><line x1="12" y1="15" x2="12" y2="15"></line></svg>
+          <span class="btn-text">测试</span>
         </button>
       </div>
 
@@ -4354,7 +11065,7 @@ const shufflePossibleEndings = (sentence: any) => {
       <div v-else-if="currentPage === 'case-training'" class="page-content page-full-width">
         <!-- 格选择界面 -->
         <div v-if="caseTrainingState === 'select-case'" class="case-select-container">
-          <h2>指定格训练</h2>
+          <h2>名词训练</h2>
           <p class="instruction">请选择要训练的变格：</p>
           <div class="case-buttons">
             <button 
@@ -4378,7 +11089,217 @@ const shufflePossibleEndings = (sentence: any) => {
         <div v-else-if="caseTrainingState === 'tutorial'" class="tutorial-container">
           <div class="tutorial-header">
             <button class="back-btn" @click="backToCaseSelect">
-              <ArrowLeft />
+              <ArrowLeft class="back-icon" />
+            </button>
+            <h2>{{ selectedCase }}格新手教学</h2>
+          </div>
+          
+          <div class="tutorial-content">
+            <div class="case-function">
+              <h3>功能</h3>
+              <p v-if="selectedCase === 2">
+                2格（属格）表示所属关系，回答"谁的？什么的？"的问题。
+              </p>
+              <p v-else-if="selectedCase === 3">
+                3格（与格）表示动作的间接对象，回答"给谁？对谁？"的问题。
+              </p>
+              <p v-else-if="selectedCase === 4">
+                4格（宾格）表示动作的直接对象，回答"谁？什么？"的问题。
+              </p>
+              <p v-else-if="selectedCase === 5">
+                5格（工具格）表示动作的工具或手段，回答"用什么？通过什么？"的问题。
+              </p>
+              <p v-else-if="selectedCase === 6">
+                6格（前置格）表示地点或状态，通常与前置词连用。
+              </p>
+            </div>
+
+            <div class="case-endings">
+              <h3>词尾变化规则</h3>
+              
+              <div class="gender-group">
+                <h4>阳性名词</h4>
+                <div class="ending-example" v-if="selectedCase === 2">
+                  <h5>单数形式</h5>
+                  <p>以辅音结尾：-а (如：стол → стола)</p>
+                  <p>以-й结尾：-я (如：музей → музея)</p>
+                  <p>以-ь结尾：-я (如：учитель → учителя)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>以辅音结尾：-ов (如：стол → столы → столов)</p>
+                  <p>以-й结尾：-ев (如：музей → музеи → музеев)</p>
+                  <p>以-ь结尾：-ей (如：учитель → учители → учителей)</p>
+                </div>
+                <div class="ending-example" v-else-if="selectedCase === 3">
+                  <h5>单数形式</h5>
+                  <p>以辅音结尾：-у (如：стол → столу)</p>
+                  <p>以-й结尾：-ю (如：музей → музею)</p>
+                  <p>以-ь结尾：-ю (如：учитель → учителю)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>以辅音结尾：-ам (如：стол → столы → столам)</p>
+                  <p>以-й结尾：-ям (如：музей → музеи → музеям)</p>
+                  <p>以-ь结尾：-ям (如：учитель → учители → учителям)</p>
+                </div>
+                <div class="ending-example" v-else-if="selectedCase === 4">
+                  <h5>单数形式</h5>
+                  <p>非动物名词：不变位 (如：стол → стол)</p>
+                  <p>动物名词：同2格 (如：учитель → учителя)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>非动物名词：不变位 (如：стол → столы → столы)</p>
+                  <p>动物名词：同2格 (如：учитель → учители → учителей)</p>
+                </div>
+                <div class="ending-example" v-else-if="selectedCase === 5">
+                  <h5>单数形式</h5>
+                  <p>以辅音结尾：-ом (如：стол → столом)</p>
+                  <p>以-й结尾：-ем (如：музей → музеем)</p>
+                  <p>以-ь结尾：-ем (如：учитель → учителем)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>以辅音结尾：-ами (如：стол → столы → столами)</p>
+                  <p>以-й结尾：-ями (如：музей → музеи → музеями)</p>
+                  <p>以-ь结尾：-ями (如：учитель → учители → учителями)</p>
+                </div>
+                <div class="ending-example" v-else-if="selectedCase === 6">
+                  <h5>单数形式</h5>
+                  <p>以辅音结尾：-е (如：стол → столе)</p>
+                  <p>以-й结尾：-е (如：музей → музее)</p>
+                  <p>以-ь结尾：-е (如：учитель → учителе)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>以辅音结尾：-ах (如：стол → столы → столах)</p>
+                  <p>以-й结尾：-ях (如：музей → музеи → музеях)</p>
+                  <p>以-ь结尾：-ях (如：учитель → учители → учителях)</p>
+                </div>
+              </div>
+
+              <div class="gender-group">
+                <h4>阴性名词</h4>
+                <div class="ending-example" v-if="selectedCase === 2">
+                  <h5>单数形式</h5>
+                  <p>以-а结尾：-ы (如：школа → школы)</p>
+                  <p>以-я结尾：-и (如：тетя → тети)</p>
+                  <p>以-ь结尾：-и (如：тётя → тёти)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>以-а结尾：无词尾 (如：книга → книги → книг)</p>
+                  <p>以-я结尾：无词尾 (如：тетя → тети → тет)</p>
+                  <p>以-ь结尾：-ей (如：ночь → ночи → ночей)</p>
+                </div>
+                <div class="ending-example" v-else-if="selectedCase === 3">
+                  <h5>单数形式</h5>
+                  <p>以-а结尾：-е (如：книга → книге)</p>
+                  <p>以-я结尾：-ю (如：тетя → тетю)</p>
+                  <p>以-ь结尾：-и (如：тётя → тёти)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>以-а结尾：-ам (如：книга → книги → книгам)</p>
+                  <p>以-я结尾：-ям (如：тетя → тети → тетям)</p>
+                  <p>以-ь结尾：-ям (如：ночь → ночи → ночам)</p>
+                </div>
+                <div class="ending-example" v-else-if="selectedCase === 4">
+                  <h5>单数形式</h5>
+                  <p>以-а结尾：-у (如：книга → книгу)</p>
+                  <p>以-я结尾：-ю (如：тетя → тетю)</p>
+                  <p>以-ь结尾：不变位 (如：ночь → ночь)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>以-а结尾：不变位 (如：книга → книги → книги)</p>
+                  <p>以-я结尾：不变位 (如：тетя → тети → тети)</p>
+                  <p>以-ь结尾：不变位 (如：ночь → ночи → ночи)</p>
+                </div>
+                <div class="ending-example" v-else-if="selectedCase === 5">
+                  <h5>单数形式</h5>
+                  <p>以-а结尾：-ой (如：книга → книгой)</p>
+                  <p>以-я结尾：-ей (如：тетя → тетей)</p>
+                  <p>以-ь结尾：-ью (如：ночь → ночью)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>以-а结尾：-ами (如：книга → книги → книгами)</p>
+                  <p>以-я结尾：-ями (如：тетя → тети → тетями)</p>
+                  <p>以-ь结尾：-ями (如：ночь → ночи → ночами)</p>
+                </div>
+                <div class="ending-example" v-else-if="selectedCase === 6">
+                  <h5>单数形式</h5>
+                  <p>以-а结尾：-е (如：книга → книге)</p>
+                  <p>以-я结尾：-е (如：тетя → тетее)</p>
+                  <p>以-ь结尾：-и (如：ночь → ночи)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>以-а结尾：-ах (如：книга → книги → книгах)</p>
+                  <p>以-я结尾：-ях (如：тетя → тети → тетях)</p>
+                  <p>以-ь结尾：-ях (如：ночь → ночи → ночях)</p>
+                </div>
+              </div>
+
+              <div class="gender-group">
+                <h4>中性名词</h4>
+                <div class="ending-example" v-if="selectedCase === 2">
+                  <h5>单数形式</h5>
+                  <p>以-о结尾：-а (如：окно → окна)</p>
+                  <p>以-е结尾：-я (如：море → моря)</p>
+                  <p>以-ее结尾：-я (如：мяч → мяча)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>以-о结尾：-ов (如：окно → окна → окон)</p>
+                  <p>以-е结尾：-ев (如：море → моря → морей)</p>
+                  <p>以-ее结尾：-ей (如：мяч → мяча → мячей)</p>
+                </div>
+                <div class="ending-example" v-else-if="selectedCase === 3">
+                  <h5>单数形式</h5>
+                  <p>以-о结尾：-у (如：окно → окну)</p>
+                  <p>以-е结尾：-ю (如：море → морю)</p>
+                  <p>以-ее结尾：-ю (如：мяч → мячу)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>以-о结尾：-ам (如：окно → окна → окнам)</p>
+                  <p>以-е结尾：-ям (如：море → моря → морям)</p>
+                  <p>以-ее结尾：-ям (如：мяч → мяча → мячам)</p>
+                </div>
+                <div class="ending-example" v-else-if="selectedCase === 4">
+                  <h5>单数形式</h5>
+                  <p>不变位 (如：окно → окно)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>不变位 (如：окно → окна → окна)</p>
+                </div>
+                <div class="ending-example" v-else-if="selectedCase === 5">
+                  <h5>单数形式</h5>
+                  <p>以-о结尾：-ом (如：окно → окном)</p>
+                  <p>以-е结尾：-ем (如：море → морем)</p>
+                  <p>以-ее结尾：-ем (如：мяч → мячем)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>以-о结尾：-ами (如：окно → окна → окнами)</p>
+                  <p>以-е结尾：-ями (如：море → моря → морями)</p>
+                  <p>以-ее结尾：-ями (如：мяч → мяча → мячами)</p>
+                </div>
+                <div class="ending-example" v-else-if="selectedCase === 6">
+                  <h5>单数形式</h5>
+                  <p>以-о结尾：-е (如：окно → окне)</p>
+                  <p>以-е结尾：-е (如：море → море)</p>
+                  <p>以-ее结尾：-е (如：мяч → мяче)</p>
+                  <p>&nbsp;</p>
+                  <h5>复数形式</h5>
+                  <p>以-о结尾：-ах (如：окно → окна → окнах)</p>
+                  <p>以-е结尾：-ях (如：море → моря → морях)</p>
+                  <p>以-ее结尾：-ях (如：мяч → мяча → мячах)</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="tutorial-footer">
+              <button class="start-btn" @click="caseTrainingState = 'practice'; loadPracticeSentence()">开始训练</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 新手教学界面 -->
+        <div v-else-if="caseTrainingState === 'tutorial'" class="tutorial-container">
+          <div class="tutorial-header">
+            <button class="back-btn" @click="backToCaseSelect">
+              <ArrowLeft class="back-icon" />
             </button>
             <h2>{{ selectedCase }}格新手教学</h2>
           </div>
@@ -4577,7 +11498,7 @@ const shufflePossibleEndings = (sentence: any) => {
         <div v-else-if="caseTrainingState === 'practice'" class="practice-container">
           <div class="practice-header">
             <button class="back-btn" @click="backToCaseSelect">
-              <ArrowLeft />
+              <ArrowLeft class="back-icon" />
             </button>
             <h2>{{ selectedCase }}格实战训练</h2>
           </div>
@@ -4641,6 +11562,8 @@ const shufflePossibleEndings = (sentence: any) => {
         </div>
       </div>
 
+
+
       <div v-else-if="currentPage === 'test'" class="page-content">
         <h2>测试</h2>
         <p class="instruction">共15题，选择正确的变格形式</p>
@@ -4657,6 +11580,7 @@ const shufflePossibleEndings = (sentence: any) => {
 
           <!-- 题目展示 -->
           <div class="question-container">
+            <p class="question-number-tag">（{{ testQuestions[currentQuestionIndex]?.number }}）</p>
             <p class="question-text" v-html="testQuestions[currentQuestionIndex]?.text"></p>
           </div>
 
@@ -4705,6 +11629,7 @@ const shufflePossibleEndings = (sentence: any) => {
 
           <!-- 题目展示 -->
           <div class="question-container">
+            <p class="question-number-tag">（{{ testQuestions[currentQuestionIndex]?.number }}）</p>
             <p class="question-text" v-html="testQuestions[currentQuestionIndex]?.text"></p>
           </div>
 
@@ -4797,339 +11722,1502 @@ const shufflePossibleEndings = (sentence: any) => {
       </div>
 
       <div v-else-if="currentPage === 'declension-rules'" class="page-content page-full-width">
-        <h2>变格规则</h2>
-        <p class="instruction">俄语名词六个格的变化规则</p>
+        <h2 class="mobile-only">变格规则</h2>
         
-        <!-- 变格规则内容 - 移动端保持原样 -->
+        <!-- 分类导航条 - 可滑动 -->
+        <div class="rules-category-nav mobile-only">
+          <div class="category-scroll">
+            <button 
+              v-for="cat in [
+                { id: 'noun', label: '名词' },
+                { id: 'adjective', label: '形容词' },
+                { id: 'personal-pronoun', label: '人称代词' },
+                { id: 'possessive-pronoun', label: '物主代词' },
+                { id: 'other', label: '其他' }
+              ]" 
+              :key="cat.id"
+              class="category-btn"
+              :class="{ active: selectedRulesCategory === cat.id }"
+              @click="selectRulesCategory(cat.id as RulesCategory)"
+            >
+              {{ cat.label }}
+            </button>
+          </div>
+        </div>
+        
+        <p class="instruction mobile-only" v-if="selectedRulesCategory === 'noun'">名词变格规则</p>
+        <p class="instruction mobile-only" v-else-if="selectedRulesCategory === 'adjective'">形容词变格规则</p>
+        <p class="instruction mobile-only" v-else-if="selectedRulesCategory === 'personal-pronoun'">人称代词变格规则</p>
+        <p class="instruction mobile-only" v-else-if="selectedRulesCategory === 'possessive-pronoun'">物主代词变格规则</p>
+        <p class="instruction mobile-only" v-else-if="selectedRulesCategory === 'other'">指示代词、疑问词、反身代词变格规则</p>
+        
+        <!-- 变格规则内容 - 移动端 -->
         <div class="declension-rules mobile-only">
-          <!-- 1格 -->
-          <div class="case-rule">
-            <div class="case-header" @click="toggleCaseExpansion(1)">
-              <h3>1格（主格）</h3>
-              <span class="expand-icon">{{ expandedCases[1] ? '▼' : '▶' }}</span>
-            </div>
-            <div v-if="expandedCases[1]" class="case-content">
-              <div class="case-function">
-                <h4>功能</h4>
-                <p>表示动作的主体或主语，回答"谁？什么？"的问题。</p>
+          <!-- 名词分类 -->
+          <template v-if="selectedRulesCategory === 'noun'">
+            <!-- 1格 -->
+            <div class="case-rule">
+              <div class="case-header" @click="toggleCaseExpansion(1)">
+                <h3>1格（主格）</h3>
+                <span class="expand-icon">{{ expandedCases[1] ? '▼' : '▶' }}</span>
               </div>
-              <div class="case-endings">
-                <h4>词尾变化</h4>
-                <div class="number-group">
-                  <h5>单数形式</h5>
-                  <p>1格为名词的原型，不需要变化。</p>
+              <div v-if="expandedCases[1]" class="case-content">
+                <div class="case-function">
+                  <h4>功能</h4>
+                  <p>表示动作的主体或主语，回答"谁？什么？"的问题。</p>
                 </div>
-                <div class="number-group">
-                  <h5>复数形式</h5>
-                  <div class="gender-group">
-                    <h6>阳性名词</h6>
-                    <ul>
-                      <li>以辅音结尾：加-ы (如：стол → столы)</li>
-                      <li>以-й,-ь; -г,-к,-х,-ж,-ч,-ш,-щ结尾：变-и <br>(如：музей → музеи, конь → кони, нож → ножи, язык → языки, стих→ стихи́等)</li>
-                      <li>特殊：重音移动至词尾时，变а或я。（如：до'м → дома', ле'с → леса', учи'тель → учителя'）</li>
-                    </ul>
+                <div class="case-auxiliary">
+                  <h4>标志词</h4>
+                  <table class="auxiliary-table">
+                    <tr>
+                      <td class="auxiliary-category">动词</td>
+                      <td class="auxiliary-words">быть（есть）</td>
+                    </tr>
+                  </table>
+                </div>
+                <div class="case-endings">
+                  <h4>词尾变化</h4>
+                  <div class="number-group">
+                    <h5>单数形式</h5>
+                    <p>1格为名词的原型，不需要变化。</p>
                   </div>
-                  <div class="gender-group">
-                    <h6>中性名词</h6>
-                    <ul>
-                      <li>以-о结尾：变-а (如：окно → окна)</li>
-                      <li>以-е结尾：变-я (如：море → моря)</li>
-                      <li>以мя结尾：变-мена (如：время → времена)</li>
-                    </ul>
-                  </div>
-                  <div class="gender-group">
-                    <h6>阴性名词</h6>
-                    <ul>
-                      <li>以-а结尾：加-ы (如：машина → машины)<br>特殊：га, ка, ха, жа, ча, ша, ща结尾：а变-и（如：книга → книги, рука → руки）</li>
-                      <li>以-ь,-я结尾：变-и (如：ночь → ночи, неделя → недели)</li>
-                    </ul>
+                  <div class="number-group">
+                    <h5>复数形式</h5>
+                    <div class="gender-group">
+                      <h6>阳性名词</h6>
+                      <ul>
+                        <li>以辅音结尾：加-ы (如：стол → столы)</li>
+                        <li>以-й,-ь; -г,-к,-х,-ж,-ч,-ш,-щ结尾：变-и <br>(如：музей → музеи, конь → кони, нож → ножи, язык → языки, стих→ стихи́等)</li>
+                        <li>特殊：重音移动至词尾时，变а或я。（如：до'м → дома', ле'с → леса', учи'тель → учителя'）</li>
+                      </ul>
+                    </div>
+                    <div class="gender-group">
+                      <h6>中性名词</h6>
+                      <ul>
+                        <li>以-о结尾：变-а (如：окно → окна)</li>
+                        <li>以-е结尾：变-я (如：море → моря)</li>
+                        <li>以мя结尾：变-мена (如：время → времена)</li>
+                      </ul>
+                    </div>
+                    <div class="gender-group">
+                      <h6>阴性名词</h6>
+                      <ul>
+                        <li>以-а结尾：加-ы (如：машина → машины)<br>特殊：га, ка, ха, жа, ча, ша, ща结尾：а变-и（如：книга → книги, рука → руки）</li>
+                        <li>以-ь,-я结尾：变-и (如：ночь → ночи, неделя → недели)</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+            <!-- 2-6格内容继续... -->
+            <!-- 2格 -->
+            <div class="case-rule">
+              <div class="case-header" @click="toggleCaseExpansion(2)">
+                <h3>2格（属格）</h3>
+                <span class="expand-icon">{{ expandedCases[2] ? '▼' : '▶' }}</span>
+              </div>
+              <div v-if="expandedCases[2]" class="case-content">
+                <div class="case-function">
+                  <h4>功能</h4>
+                  <p>表示所属关系，回答"谁的？什么的？"的问题。</p>
+                </div>
+                <div class="case-auxiliary">
+                  <h4>标志词</h4>
+                  <table class="auxiliary-table">
+                    <tr>
+                      <td class="auxiliary-category">无人称谓语</td>
+                      <td class="auxiliary-words">нет</td>
+                    </tr>
+                    <tr>
+                      <td class="auxiliary-category">介词</td>
+                      <td class="auxiliary-words">у, из, из-за, от,<br> c（从…）, до, без, для, около, после, вокруг（周围）, вместо（代替）</td>
+                    </tr>
+                    <tr>
+                      <td class="auxiliary-category">动词</td>
+                      <td class="auxiliary-words">не иметь（没有）、<br>лишиться（失去）、<br>достичь（达到）、<br></br>касаться（涉及）、<br>добиться（获得）</td>
+                    </tr>
+                  </table>
+                </div>
+                <div class="case-endings">
+                  <h4>词尾变化</h4>
+                  <div class="number-group">
+                    <h5>单数形式</h5>
+                    <div class="gender-group">
+                      <h6>阳性名词</h6>
+                      <ul>
+                        <li>以辅音结尾：加-а (如：стол → стола, нож → ножа)</li>
+                        <li>以-й, -ь结尾：变-я (如：музей → музея, учитель → учителя)</li>
+                      </ul>
+                    </div>
+                    <div class="gender-group">
+                      <h6>中性名词</h6>
+                      <ul>
+                        <li>以-о结尾：变-а (如：окно → окна)</li>
+                        <li>以-е结尾：变-я (如：море → моря)</li>
+                        <li>以-мя结尾：变-мени (如：время → времени)</li>
+                      </ul>
+                    </div>
+                    <div class="gender-group">
+                      <h6>阴性名词</h6>
+                      <ul>
+                        <li>以-а结尾：加-ы (如：школа → школы)<br>特殊：га, ка, ха, жа, ча, ша, ща  结尾不写 ы 而写 и(如：книга → книги,  рука → руки, муха → мухи)</li>
+                        <li>以-я结尾：变-и (如：семья → семьи)</li>
+                        <li>以-ь结尾：变-и (如：дверь → двери)</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div class="number-group">
+                    <h5>复数形式</h5>
+                    <div class="gender-group">
+                      <h6>阳性名词</h6>
+                      <ul>
+                        <li>以辅音结尾：加-ов (如：стол → столов)</li>
+                        <li>以-й结尾：变-ев (如：музей → музеев)</li>
+                        <li>以-ц结尾：重音在前时，加-ев<br> (如：та́нец → та́нцев)<br>重音在后时，加-ов<br>(如：коне́ц → концо́в)</li>
+                        <li>以-ь,-ж, -ш, -ч, -щ结尾：-ей (如：словарь → словарей，врач → врачей)</li>
+                        <li>部分阳性名词不变（如：человек → человек，сапог → сапог，глаз → глаз，раз → раз）</li>
+                      </ul>
+                    </div>
+                    <div class="gender-group">
+                      <h6>中性名词</h6>
+                      <ul>
+                        <li>以-о结尾：清尾 (如：окно → окон, место → мест, письмо → писем)</li>
+                        <li>以-е结尾：加-й (如：море → морей)</li>
+                        <li>以-ие 结尾：变为-ий（例：здание → зданий）</li>
+                        <li>以-мя结尾：变为 -мён（如：время → времён）</li>
+                      </ul>
+                    </div>
+                    <div class="gender-group">
+                      <h6>阴性名词</h6>
+                      <ul>
+                        <li>以-а结尾：<br>①清尾 (如：книга → книг)<br>②清尾，并在末尾辅音字母前加-о/-е（如：сестра → сестёр，доска → досок）</li>
+                        <li>以-я结尾：<br>①变-ей (如：доля → долей)<br>②清尾，并在末尾辅音字母前加-е（如：песня → песен）<br>③变ь，并在末尾辅音字母前加-е（如：земля → земель）</li>
+                        <li>以-ь结尾：变-ей (如：площадь → площадей)</li>
+                        <li>以-ия 结尾：变-ий(如：армия → армий)</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-          <!-- 2格 -->
-          <div class="case-rule">
-            <div class="case-header" @click="toggleCaseExpansion(2)">
-              <h3>2格（属格）</h3>
-              <span class="expand-icon">{{ expandedCases[2] ? '▼' : '▶' }}</span>
-            </div>
-            <div v-if="expandedCases[2]" class="case-content">
-              <div class="case-function">
-                <h4>功能</h4>
-                <p>表示所属关系，回答"谁的？什么的？"的问题。</p>
+            <!-- 3格 -->
+            <div class="case-rule">
+              <div class="case-header" @click="toggleCaseExpansion(3)">
+                <h3>3格（与格）</h3>
+                <span class="expand-icon">{{ expandedCases[3] ? '▼' : '▶' }}</span>
               </div>
-              <div class="case-endings">
-                <h4>词尾变化</h4>
-                <div class="number-group">
-                  <h5>单数形式</h5>
-                  <div class="gender-group">
-                    <h6>阳性名词</h6>
-                    <ul>
-                      <li>以辅音结尾：加-а (如：стол → стола, нож → ножа)</li>
-                      <li>以-й, -ь结尾：变-я (如：музей → музея, учитель → учителя)</li>
-                    </ul>
-                  </div>
-                  <div class="gender-group">
-                    <h6>中性名词</h6>
-                    <ul>
-                      <li>以-о结尾：变-а (如：окно → окна)</li>
-                      <li>以-е结尾：变-я (如：море → моря)</li>
-                      <li>以-мя结尾：变-мени (如：время → времени)</li>
-                    </ul>
-                  </div>
-                  <div class="gender-group">
-                    <h6>阴性名词</h6>
-                    <ul>
-                      <li>以-а结尾：加-ы (如：школа → школы)<br>特殊：га, ка, ха, жа, ча, ша, ща  结尾不写 ы 而写 и(如：книга → книги,  рука → руки, муха → мухи)</li>
-                      <li>以-я结尾：变-и (如：семья → семьи)</li>
-                      <li>以-ь结尾：变-и (如：дверь → двери)</li>
-                    </ul>
-                  </div>
+              <div v-if="expandedCases[3]" class="case-content">
+                <div class="case-function">
+                  <h4>功能</h4>
+                  <p>表示动作的间接对象，回答"给谁？对谁？"的问题。</p>
                 </div>
-                <div class="number-group">
-                  <h5>复数形式</h5>
-                  <div class="gender-group">
-                    <h6>阳性名词</h6>
-                    <ul>
-                      <li>以辅音结尾：加-ов (如：стол → столов)</li>
-                      <li>以-й结尾：变-ев (如：музей → музеев)</li>
-                      <li>以-ц结尾：重音在前时，加-ев<br> (如：та́нец → та́нцев)<br>重音在后时，加-ов<br>(如：коне́ц → концо́в)</li>
-                      <li>以-ь,-ж, -ш, -ч, -щ结尾：-ей (如：словарь → словарей，врач → врачей)</li>
-                      <li>部分阳性名词不变（如：человек → человек，сапог → сапог，глаз → глаз，раз → раз）</li>
-                    </ul>
+                <div class="case-auxiliary">
+                  <h4>标志词</h4>
+                  <table class="auxiliary-table">
+                    <tbody>
+                      <tr>
+                        <td class="auxiliary-category">介词</td>
+                        <td class="auxiliary-words">к, по, благодаря,<br> вопреки（与……相反）, навстречу（朝着……）</td>
+                      </tr>
+                      <tr>
+                        <td class="auxiliary-category">动词</td>
+                        <td class="auxiliary-words">сниться, рад, верить, помогать, мешать（打扰）, завидовать(嫉妒), сочувствовать(建议), удивляться(惊讶), позвонить</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="case-endings">
+                  <h4>词尾变化</h4>
+                  <div class="number-group">
+                    <h5>单数形式</h5>
+                    <div class="gender-group">
+                      <h6>阳性名词</h6>
+                      <ul>
+                        <li>以辅音结尾：-у (如：стол → столу)</li>
+                        <li>以-й结尾：-ю (如：музей → музею)</li>
+                        <li>以-ь结尾：-ю (如：учитель → учителю)</li>
+                      </ul>
+                    </div>
+                    <div class="gender-group">
+                      <h6>中性名词</h6>
+                      <ul>
+                        <li>以-о结尾：-у (如：окно → окну)</li>
+                        <li>以-е结尾：-ю (如：море → морю)</li>
+                        <li>以-мя结尾：-мени (如：время → времени)</li>
+                      </ul>
+                    </div>
+                    <div class="gender-group">
+                      <h6>阴性名词</h6>
+                      <ul>
+                        <li>以-а, -я结尾：变-е (如：книга → книге, неделя → неделе)</li>
+                        <li>以-ия结尾：变-ии (如：Россия → России)</li>
+                        <li>以-ь结尾：变-и (如：ночь → ночи)</li>
+                      </ul>
+                    </div>
                   </div>
-                  <div class="gender-group">
-                    <h6>中性名词</h6>
-                    <ul>
-                      <li>以-о结尾：清尾 (如：окно → окон, место → мест, письмо → писем)</li>
-                      <li>以-е结尾：加-й (如：море → морей)</li>
-                      <li>以-ие 结尾：变为-ий（例：здание → зданий）</li>
-                      <li>以-мя结尾：变为 -мён（如：время → времён）</li>
-                    </ul>
-                  </div>
-                  <div class="gender-group">
-                    <h6>阴性名词</h6>
-                    <ul>
-                      <li>以-а结尾：<br>①清尾 (如：книга → книг)<br>②清尾，并在末尾辅音字母前加-о/-е（如：сестра → сестёр，доска → досок）</li>
-                      <li>以-я结尾：<br>①变-ей (如：доля → долей)<br>②清尾，并在末尾辅音字母前加-е（如：песня → песен）<br>③变ь，并在末尾辅音字母前加-е（如：земля → земель）</li>
-                      <li>以-ь结尾：变-ей (如：площадь → площадей)</li>
-                      <li>以-ия 结尾：变-ий(如：армия → армий)</li>
-                    </ul>
+                  <div class="number-group">
+                    <h5>复数形式</h5>
+                    <div class="gender-group">
+                      <h6>不论性</h6>
+                      <ul>
+                        <li>以辅音结尾或-а结尾：-ам (如：стол → столам, книга → книгам)</li>
+                        <li>以-й,-ь,-е,-я结尾 → 变-ям (如：музей → музеям, учитель → учителям)</li>
+                        <li>特殊：以 -мя 结尾的中性名词 → 加 -енам（время → временам）</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- 3格 -->
-          <div class="case-rule">
-            <div class="case-header" @click="toggleCaseExpansion(3)">
-              <h3>3格（与格）</h3>
-              <span class="expand-icon">{{ expandedCases[3] ? '▼' : '▶' }}</span>
-            </div>
-            <div v-if="expandedCases[3]" class="case-content">
-              <div class="case-function">
-                <h4>功能</h4>
-                <p>表示动作的间接对象，回答"给谁？对谁？"的问题。</p>
+            <!-- 4格 -->
+            <div class="case-rule">
+              <div class="case-header" @click="toggleCaseExpansion(4)">
+                <h3>4格（宾格）</h3>
+                <span class="expand-icon">{{ expandedCases[4] ? '▼' : '▶' }}</span>
               </div>
-              <div class="case-endings">
-                <h4>词尾变化</h4>
-                <div class="number-group">
-                  <h5>单数形式</h5>
-                  <div class="gender-group">
-                    <h6>阳性名词</h6>
-                    <ul>
-                      <li>以辅音结尾：-у (如：стол → столу)</li>
-                      <li>以-й结尾：-ю (如：музей → музею)</li>
-                      <li>以-ь结尾：-ю (如：учитель → учителю)</li>
-                    </ul>
+              <div v-if="expandedCases[4]" class="case-content">
+                <div class="case-function">
+                  <h4>功能</h4>
+                  <p>表示动作的直接对象，回答"谁？什么？"的问题。</p>
+                </div>
+                <div class="case-auxiliary">
+                  <h4>标志词</h4>
+                  <table class="auxiliary-table">
+                    <tbody>
+                      <tr>
+                        <td class="auxiliary-category">介词</td>
+                        <td class="auxiliary-words">на, в, за（向……，为了……）, про, через, сквозь（通过）, под（往……下面）</td>
+                      </tr>
+                      <tr>
+                        <td class="auxiliary-category">动词</td>
+                        <td class="auxiliary-words">видеть, любить, читать, делать, слушать, знать, ждать, есть（吃）</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="case-endings">
+                  <h4>词尾变化</h4>
+                  <div class="number-group">
+                    <h5>单数形式</h5>
+                    <div class="gender-group">
+                      <h6>阳性名词</h6>
+                      <ul>
+                        <li>非动物名词：不变 (如：стол → стол)</li>
+                        <li>动物名词：同2格单数 (如：учитель → учителя)</li>
+                      </ul>
+                    </div>
+                    <div class="gender-group">
+                      <h6>中性名词</h6>
+                      <ul>
+                        <li>不变位 (如：окно → окно)</li>
+                      </ul>
+                    </div>
+                    <div class="gender-group">
+                      <h6>阴性名词</h6>
+                      <ul>
+                        <li>以-а结尾：-у (如：книга → книгу)</li>
+                        <li>以-я结尾：-ю (如：тетя → тетю)</li>
+                        <li>以-ь结尾：不变位 (如：ночь → ночь)</li>
+                      </ul>
+                    </div>
                   </div>
-                  <div class="gender-group">
-                    <h6>中性名词</h6>
-                    <ul>
-                      <li>以-о结尾：-у (如：окно → окну)</li>
-                      <li>以-е结尾：-ю (如：море → морю)</li>
-                      <li>以-мя结尾：-мени (如：время → времени)</li>
-                    </ul>
-                  </div>
-                  <div class="gender-group">
-                    <h6>阴性名词</h6>
-                    <ul>
-                      <li>以-а, -я结尾：变-е (如：книга → книге, неделя → неделе)</li>
-                      <li>以-ия结尾：变-ии (如：Россия → России)</li>
-                      <li>以-ь结尾：变-и (如：ночь → ночи)</li>
-                    </ul>
+                  <div class="number-group">
+                    <h5>复数形式</h5>
+                    <div class="gender-group">
+                      <h6>不论性</h6>
+                      <ul>
+                        <li>非动物名词：同1格复数 (如：стол → столы，книга → книги)</li>
+                        <li>动物名词：同2格复数 (如：учитель → учителей，кошка → кошек)</li>
+                        <li>中性名词：同1格复数 (如：окно → окна, море → моря)</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
-                <div class="number-group">
-                  <h5>复数形式</h5>
-                  <div class="gender-group">
-                    <h6>不论性</h6>
-                    <ul>
-                      <li>以辅音结尾或-а结尾：-ам (如：стол → столам, книга → книгам)</li>
-                      <li>以-й,-ь,-е,-я结尾 → 变-ям (如：музей → музеям, учитель → учителям)</li>
-                      <li>特殊：以 -мя 结尾的中性名词 → 加 -енам（время → временам）</li>
-                    </ul>
-                  </div>
-                </div>
               </div>
             </div>
-          </div>
 
-          <!-- 4格 -->
-          <div class="case-rule">
-            <div class="case-header" @click="toggleCaseExpansion(4)">
-              <h3>4格（宾格）</h3>
-              <span class="expand-icon">{{ expandedCases[4] ? '▼' : '▶' }}</span>
-            </div>
-            <div v-if="expandedCases[4]" class="case-content">
-              <div class="case-function">
-                <h4>功能</h4>
-                <p>表示动作的直接对象，回答"谁？什么？"的问题。</p>
+            <!-- 5格 -->
+            <div class="case-rule">
+              <div class="case-header" @click="toggleCaseExpansion(5)">
+                <h3>5格（工具格）</h3>
+                <span class="expand-icon">{{ expandedCases[5] ? '▼' : '▶' }}</span>
               </div>
-              <div class="case-endings">
-                <h4>词尾变化</h4>
-                <div class="number-group">
-                  <h5>单数形式</h5>
-                  <div class="gender-group">
-                    <h6>阳性名词</h6>
-                    <ul>
-                      <li>非动物名词：不变 (如：стол → стол)</li>
-                      <li>动物名词：同2格单数 (如：учитель → учителя)</li>
-                    </ul>
+              <div v-if="expandedCases[5]" class="case-content">
+                <div class="case-function">
+                  <h4>功能</h4>
+                  <p>表示动作的工具或手段，回答"用什么？通过什么？"的问题。</p>
+                </div>
+                <div class="case-auxiliary">
+                  <h4>标志词</h4>
+                  <table class="auxiliary-table">
+                    <tbody>
+                      <tr>
+                        <td class="auxiliary-category">介词</td>
+                        <td class="auxiliary-words">с, над, под, перед, между, за（在…）</td>
+                      </tr>
+                      <tr>
+                        <td class="auxiliary-category">动词</td>
+                        <td class="auxiliary-words">интересоваться（感兴趣）、гордиться（以...为荣）、обладать（拥有）、пользоваться（使用）、заниматься（从事）</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="case-endings">
+                  <h4>词尾变化</h4>
+                  <div class="number-group">
+                    <h5>单数形式</h5>
+                    <div class="gender-group">
+                      <h6>阳性、中性名词</h6>
+                      <ul>
+                        <li>一般情况：-ом (如：стол → столом, окно → окном)</li>
+                        <li>以-й, -ь, -е(ё)结尾：变-ем/-ём (如：музей → музеем, словарь → словарём, поле → полем)</li>
+                        <li>以 ж, ч, ш, щ结尾：加-ем（如：нож → ножом, товарищ → товарищем）</li>
+                      </ul>
+                    </div>
+                    <div class="gender-group">
+                      <h6>阴性名词</h6>
+                      <ul>
+                        <li>以-а结尾：变-ой (如：книга → книгой)</li>
+                        <li>以-я结尾：变-ей (如：тетя → тетей)</li>
+                        <li>以-ь结尾：加-ю (如：ночь → ночью)</li>
+                      </ul>
+                    </div>
                   </div>
-                  <div class="gender-group">
-                    <h6>中性名词</h6>
-                    <ul>
-                      <li>不变位 (如：окно → окно)</li>
-                    </ul>
-                  </div>
-                  <div class="gender-group">
-                    <h6>阴性名词</h6>
-                    <ul>
-                      <li>以-а结尾：-у (如：книга → книгу)</li>
-                      <li>以-я结尾：-ю (如：тетя → тетю)</li>
-                      <li>以-ь结尾：不变位 (如：ночь → ночь)</li>
-                    </ul>
+                  <div class="number-group">
+                    <h5>复数形式</h5>
+                    <div class="gender-group">
+                      <h6>不论性</h6>
+                      <ul>
+                        <li>一般情况下：加-ами (如：стол → столами)</li>
+                        <li>以-й,е,-я,-ь结尾：变-ями (如：музей → музеями, поле → полями, тётя → тётями, учитель → учителями)</li>
+                        <li>特殊复数形式ья结尾：-ями （如：друзья（朋友们）→ друзьями, деревья（树木们）→ деревьями</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
-                <div class="number-group">
-                  <h5>复数形式</h5>
-                  <div class="gender-group">
-                    <h6>不论性</h6>
-                    <ul>
-                      <li>非动物名词：同1格复数 (如：стол → столы，книга → книги)</li>
-                      <li>动物名词：同2格复数 (如：учитель → учителей，кошка → кошек)</li>
-                      <li>中性名词：同1格复数 (如：окно → окна, море → моря)</li>
-                    </ul>
-                  </div>
-                </div>
               </div>
             </div>
-          </div>
 
-          <!-- 5格 -->
-          <div class="case-rule">
-            <div class="case-header" @click="toggleCaseExpansion(5)">
-              <h3>5格（工具格）</h3>
-              <span class="expand-icon">{{ expandedCases[5] ? '▼' : '▶' }}</span>
-            </div>
-            <div v-if="expandedCases[5]" class="case-content">
-              <div class="case-function">
-                <h4>功能</h4>
-                <p>表示动作的工具或手段，回答"用什么？通过什么？"的问题。</p>
+            <!-- 6格 -->
+            <div class="case-rule">
+              <div class="case-header" @click="toggleCaseExpansion(6)">
+                <h3>6格（前置格）</h3>
+                <span class="expand-icon">{{ expandedCases[6] ? '▼' : '▶' }}</span>
               </div>
-              <div class="case-endings">
-                <h4>词尾变化</h4>
-                <div class="number-group">
-                  <h5>单数形式</h5>
-                  <div class="gender-group">
-                    <h6>阳性、中性名词</h6>
-                    <ul>
-                      <li>一般情况：-ом (如：стол → столом, окно → окном)</li>
-                      <li>以-й, -ь, -е(ё)结尾：变-ем/-ём (如：музей → музеем, словарь → словарём, поле → полем)</li>
-                      <li>以 ж, ч, ш, щ结尾：加-ем（如：нож → ножом, товарищ → товарищем）</li>
-                    </ul>
+              <div v-if="expandedCases[6]" class="case-content">
+                <div class="case-function">
+                  <h4>功能</h4>
+                  <p>表示地点或状态，通常与前置词连用。</p>
+                </div>
+                <div class="case-auxiliary">
+                  <h4>标志词</h4>
+                  <table class="auxiliary-table">
+                    <tbody>
+                      <tr>
+                        <td class="auxiliary-category">介词</td>
+                        <td class="auxiliary-words">о, об, в, на（在…）, при</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="case-endings">
+                  <h4>词尾变化</h4>
+                  <div class="number-group">
+                    <h5>单数形式</h5>
+                    <div class="gender-group">
+                      <h6>不论性</h6>
+                      <ul>
+                        <li>一般情况下：加-е (如：стол → о столе, город → в городе)<br>特殊：重音移动（如：лес → в лесу́，сад → в саду́，мост → на мосту́，пол → на полу́，шкаф → в шкафу́，берег → на берегу́）</li>
+                        <li>阳性-ий、中性-ие、阴性-ия、-ь: 末尾变-и<br>（如：санаторий → в санатории, здание → в здании, станция → на станции, ночь → в ночи）</li>
+                      </ul>
+                    </div>
                   </div>
-                  <div class="gender-group">
-                    <h6>阴性名词</h6>
-                    <ul>
-                      <li>以-а结尾：变-ой (如：книга → книгой)</li>
-                      <li>以-я结尾：变-ей (如：тетя → тетей)</li>
-                      <li>以-ь结尾：加-ю (如：ночь → ночью)</li>
-                    </ul>
+                  <div class="number-group">
+                    <h5>复数形式</h5>
+                    <div class="gender-group">
+                      <h6>不分性</h6>
+                      <ul>
+                        <li>一般情况：-ах (如：стол → столах，место → местах，машина → машинах)</li>
+                        <li>以-й,-ь,-я,-е结尾：-ях <br>(如：музей → в музеях, камень → на камнях, неделя → в неделях, море → в морях)</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
-                <div class="number-group">
-                  <h5>复数形式</h5>
-                  <div class="gender-group">
-                    <h6>不论性</h6>
-                    <ul>
-                      <li>一般情况下：加-ами (如：стол → столами)</li>
-                      <li>以-й,е,-я,-ь结尾：变-ями (如：музей → музеями, поле → полями, тётя → тётями, учитель → учителями)</li>
-                      <li>特殊复数形式ья结尾：-ями （如：друзья（朋友们）→ друзьями, деревья（树木们）→ деревьями</li>
-                    </ul>
-                  </div>
-                </div>
               </div>
             </div>
-          </div>
+          </template>
+          
+          <!-- 形容词分类 -->
+          <template v-else-if="selectedRulesCategory === 'adjective'">
+            <div class="declension-table-section">
+              <h3>硬变化</h3>
+              <p class="table-description">适用于词干以硬辅音结尾的形容词<br>（如 новый、молодой）<br>特殊：词干以 г, к, х结尾的形容词<br>（如 долгий, дорогой, русский, тихий, плохой）</p>
+              <table class="declension-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>阳性</th>
+                    <th>阴性</th>
+                    <th>中性</th>
+                    <th>复数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>-ый/-ой</td>
+                    <td>-ая</td>
+                    <td>-ое</td>
+                    <td>-ые</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>-ого</td>
+                    <td>-ой</td>
+                    <td>同阳性</td>
+                    <td>-ых</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>-ому</td>
+                    <td>-ой</td>
+                    <td>同阳性</td>
+                    <td>-ым</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>1或2</td>
+                    <td>-ую</td>
+                    <td>1或2</td>
+                    <td>1或2</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>-ым</td>
+                    <td>-ой(-ою)</td>
+                    <td>同阳性</td>
+                    <td>-ыми</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>-ом</td>
+                    <td>-ой</td>
+                    <td>同阳性</td>
+                    <td>-ых</td>
+                  </tr>
+                </tbody>
+                </table>
+                
+                <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+                <p class="table-note">俄语正字法要求，词干以 г, к, х结尾的形容词复数读作гы, кы, хы，写作ги, ки, хи。例如：долгие [долгые], дорогие [дорогые], русские [русскые], тихие [тихые], плохие [плохые]</p>
+              </div>
+              
+              <!-- 软变化形容词 -->
+            <div class="declension-table-section">
+              <h3>软变化</h3>
+              <p class="table-description">适用于词干以软辅音结尾的形容词<br>（如 синий,летний ）</p>
+              
+              <table class="declension-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>阳性</th>
+                    <th>阴性</th>
+                    <th>中性</th>
+                    <th>复数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>-ий</td>
+                    <td>-яя</td>
+                    <td>-ее</td>
+                    <td>-ие</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>-его</td>
+                    <td>-ей</td>
+                    <td>同阳性</td>
+                    <td>-их</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>-ему</td>
+                    <td>-ей</td>
+                    <td>同阳性</td>
+                    <td>-им</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>1或2</td>
+                    <td>-юю</td>
+                    <td>-ее</td>
+                    <td>1或2</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>-им</td>
+                    <td>-ей (-ею)</td>
+                    <td>同阳性</td>
+                    <td>-ими</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>-ем</td>
+                    <td>-ей</td>
+                    <td>同阳性</td>
+                    <td>-их</td>
+                  </tr>
+                </tbody>
+                </table>
+                
+                <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+              </div>
+              
+              <!-- 特殊变化形容词 -->
+              <div class="declension-table-section">
+                <h3>特殊变化</h3>
+                <p class="table-description">词干以咝音（ш, ж, ч, щ）结尾的形容词（如：хороший, свежий, горячий, настоящий）其变化基本遵从软变化规则，只是阴性1格和4格的变化不同。</p>
+                
+                <table class="declension-table">
+                  <thead>
+                    <tr>
+                      <th>格</th>
+                      <th>阳性</th>
+                      <th>阴性</th>
+                      <th>中性</th>
+                      <th>复数</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>1格</td>
+                      <td>-ий</td>
+                      <td><strong style="color: #e74c3c;">-ая</strong></td>
+                      <td>-ее</td>
+                      <td>-ие</td>
+                    </tr>
+                    <tr>
+                      <td>2格</td>
+                      <td>-его</td>
+                      <td>-ей</td>
+                      <td>同阳性</td>
+                      <td>-их</td>
+                    </tr>
+                    <tr>
+                      <td>3格</td>
+                      <td>-ему</td>
+                      <td>-ей</td>
+                      <td>同阳性</td>
+                      <td>-им</td>
+                    </tr>
+                    <tr>
+                      <td>4格</td>
+                      <td>1或2</td>
+                      <td><strong style="color: #e74c3c;">-ую</strong></td>
+                      <td>-ее</td>
+                      <td>1或2</td>
+                    </tr>
+                    <tr>
+                      <td>5格</td>
+                      <td>-им</td>
+                      <td>-ей (-ею)</td>
+                      <td>同阳性</td>
+                      <td>-ими</td>
+                    </tr>
+                    <tr>
+                      <td>6格</td>
+                      <td>-ем</td>
+                      <td>-ей</td>
+                      <td>同阳性</td>
+                      <td>-их</td>
+                    </tr>
+                  </tbody>
+                </table>
+                
+                <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+              </div>
+            </template>
+          
+          <!-- 人称代词分类 -->
+          <template v-else-if="selectedRulesCategory === 'personal-pronoun'">
+            <!-- 单数人称代词 -->
+            <div class="declension-table-section">
+              <h3>单数人称代词</h3>
+              <table class="pronoun-declension-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>第一人称</th>
+                    <th>第二人称</th>
+                    <th>第三人称</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>я</td>
+                    <td>ты</td>
+                    <td>он / оно / она</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>меня</td>
+                    <td>тебя</td>
+                    <td>его / её</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>мне</td>
+                    <td>тебе</td>
+                    <td>ему / ей</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>меня</td>
+                    <td>тебя</td>
+                    <td>его / её</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>мной (мною)</td>
+                    <td>тобой (тобою)</td>
+                    <td>им / ей (ею)</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>обо мне</td>
+                    <td>о тебе</td>
+                    <td>о нём / о ней</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="table-note">在大多数介词后，第三人称代词（он, она, оно, они）需要在前面加 н-。例如：к нему, от неё, без них, с ним等等</p>
+            </div>
+            
+            <!-- 复数人称代词 -->
+            <div class="declension-table-section">
+              <h3>复数人称代词</h3>
+              <table class="pronoun-declension-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>第一人称</th>
+                    <th>第二人称</th>
+                    <th>第三人称</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>мы</td>
+                    <td>вы</td>
+                    <td>они</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>нас</td>
+                    <td>вас</td>
+                    <td>их</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>нам</td>
+                    <td>вам</td>
+                    <td>им</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>нас</td>
+                    <td>вас</td>
+                    <td>их</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>нами</td>
+                    <td>вами</td>
+                    <td>ими</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>о нас</td>
+                    <td>о вас</td>
+                    <td>о них</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+          
+          <!-- 物主代词分类 -->
+          <template v-else-if="selectedRulesCategory === 'possessive-pronoun'">
+            <!-- мой (我的) -->
+            <div class="declension-table-section">
+              <h3>мой</h3>
+              <table class="possessive-pronoun-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>阳性</th>
+                    <th>中性</th>
+                    <th>阴性</th>
+                    <th>复数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>мой</td>
+                    <td>моё</td>
+                    <td>моя</td>
+                    <td>мои</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>моего</td>
+                    <td>моего</td>
+                    <td>моей</td>
+                    <td>моих</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>моему</td>
+                    <td>моему</td>
+                    <td>моей</td>
+                    <td>моим</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>мой/моего</td>
+                    <td>моё</td>
+                    <td>мою</td>
+                    <td>мои/моих</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>моим</td>
+                    <td>моим</td>
+                    <td>моей</td>
+                    <td>моими</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>моëм</td>
+                    <td>моëм</td>
+                    <td>моей</td>
+                    <td>моих</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+            </div>
+            
+            <!-- твой (你的) -->
+            <div class="declension-table-section">
+              <h3>твой</h3>
+              <table class="possessive-pronoun-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>阳性</th>
+                    <th>中性</th>
+                    <th>阴性</th>
+                    <th>复数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>твой</td>
+                    <td>твоё</td>
+                    <td>твоя</td>
+                    <td>твои</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>твоего</td>
+                    <td>твоего</td>
+                    <td>твоей</td>
+                    <td>твоих</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>твоему</td>
+                    <td>твоему</td>
+                    <td>твоей</td>
+                    <td>твоим</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>твой/твоего</td>
+                    <td>твоё</td>
+                    <td>твою</td>
+                    <td>твои/твоих</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>твоим</td>
+                    <td>твоим</td>
+                    <td>твоей</td>
+                    <td>твоими</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>твоём</td>
+                    <td>твоём</td>
+                    <td>твоей</td>
+                    <td>твоих</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+            </div>
+            
+            <!-- свой (自己的) -->
+            <div class="declension-table-section">
+              <h3>свой (自己的) </h3>
+              <table class="possessive-pronoun-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>阳性</th>
+                    <th>中性</th>
+                    <th>阴性</th>
+                    <th>复数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>свой</td>
+                    <td>своё</td>
+                    <td>своя</td>
+                    <td>свои</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>своего</td>
+                    <td>своего</td>
+                    <td>своей</td>
+                    <td>своих</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>своему</td>
+                    <td>своему</td>
+                    <td>своей</td>
+                    <td>своим</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>свой/своего</td>
+                    <td>своё</td>
+                    <td>свою</td>
+                    <td>свои/своих</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>своим</td>
+                    <td>своим</td>
+                    <td>своей</td>
+                    <td>своими</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>своëм</td>
+                    <td>своëм</td>
+                    <td>своей</td>
+                    <td>своих</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+            </div>
+            
+            <!-- наш (我们的) -->
+            <div class="declension-table-section">
+              <h3>наш</h3>
+              <table class="possessive-pronoun-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>阳性</th>
+                    <th>中性</th>
+                    <th>阴性</th>
+                    <th>复数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>наш</td>
+                    <td>наше</td>
+                    <td>наша</td>
+                    <td>наши</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>нашего</td>
+                    <td>нашего</td>
+                    <td>нашей</td>
+                    <td>наших</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>нашему</td>
+                    <td>нашему</td>
+                    <td>нашей</td>
+                    <td>нашим</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>наш/нашего</td>
+                    <td>наше</td>
+                    <td>нашу</td>
+                    <td>наши/наших</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>нашим</td>
+                    <td>нашим</td>
+                    <td>нашей</td>
+                    <td>нашими</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>нашем</td>
+                    <td>нашем</td>
+                    <td>нашей</td>
+                    <td>наших</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+            </div>
+            
+            <!-- ваш (你们的) -->
+            <div class="declension-table-section">
+              <h3>ваш</h3>
+              <table class="possessive-pronoun-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>阳性</th>
+                    <th>中性</th>
+                    <th>阴性</th>
+                    <th>复数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>ваш</td>
+                    <td>ваше</td>
+                    <td>ваша</td>
+                    <td>ваши</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>вашего</td>
+                    <td>вашего</td>
+                    <td>вашей</td>
+                    <td>ваших</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>вашему</td>
+                    <td>вашему</td>
+                    <td>вашей</td>
+                    <td>вашим</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>ваш/вашего</td>
+                    <td>ваше</td>
+                    <td>вашу</td>
+                    <td>ваши/ваших</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>вашим</td>
+                    <td>вашим</td>
+                    <td>вашей</td>
+                    <td>вашими</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>вашем</td>
+                    <td>вашем</td>
+                    <td>вашей</td>
+                    <td>ваших</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+            </div>
+            
+            <!-- его, её, их -->
+            <div class="declension-table-section">
+              <h3>его, её, их（不变格）</h3>
+              <table class="possessive-pronoun-table-simple">
+                <thead>
+                  <tr>
+                    <th>阳性</th>
+                    <th>中性</th>
+                    <th>阴性</th>
+                    <th>复数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>его</td>
+                    <td>его</td>
+                    <td>её</td>
+                    <td>их</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- весь (全部的) -->
+            <div class="declension-table-section">
+              <h3>весь (全部的) </h3>
+              <table class="possessive-pronoun-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>阳性</th>
+                    <th>中性</th>
+                    <th>阴性</th>
+                    <th>复数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>весь</td>
+                    <td>всё</td>
+                    <td>вся</td>
+                    <td>все</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>всего</td>
+                    <td>всего</td>
+                    <td>всей</td>
+                    <td>всех</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>всему</td>
+                    <td>всему</td>
+                    <td>всей</td>
+                    <td>всем</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>весь/всего</td>
+                    <td>всё</td>
+                    <td>всю</td>
+                    <td>все/всех</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>всем</td>
+                    <td>всем</td>
+                    <td>всей</td>
+                    <td>всеми</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>всём</td>
+                    <td>всём</td>
+                    <td>всей</td>
+                    <td>всех</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+            </div>
+            
+            <!--чей (谁的) -->
+            <div class="declension-table-section">
+              <h3>чей (谁的)</h3>
+              <table class="possessive-pronoun-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>阳性</th>
+                    <th>中性</th>
+                    <th>阴性</th>
+                    <th>复数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>чей</td>
+                    <td>чьё</td>
+                    <td>чья</td>
+                    <td>чьи</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>чьего</td>
+                    <td>чьего</td>
+                    <td>чьей</td>
+                    <td>чьих</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>чьему</td>
+                    <td>чьему</td>
+                    <td>чьей</td>
+                    <td>чьим</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>чей/чьего</td>
+                    <td>чьё</td>
+                    <td>чью</td>
+                    <td>чьи/чьих</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>чьим</td>
+                    <td>чьим</td>
+                    <td>чьей</td>
+                    <td>чьими</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>чьём</td>
+                    <td>чьём</td>
+                    <td>чьей</td>
+                    <td>чьих</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+            </div>
+          </template>
+          
+          <!-- 其他分类 -->
+          <template v-else-if="selectedRulesCategory === 'other'">
+            <!-- этот (这个) -->
+            <div class="declension-table-section">
+              <h3>этот</h3>
+              <table class="other-pronoun-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>阳性</th>
+                    <th>中性</th>
+                    <th>阴性</th>
+                    <th>复数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>этот</td>
+                    <td>это</td>
+                    <td>эта</td>
+                    <td>эти</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>этого</td>
+                    <td>этого</td>
+                    <td>этой</td>
+                    <td>этих</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>этому</td>
+                    <td>этому</td>
+                    <td>этой</td>
+                    <td>этим</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>этот/этого</td>
+                    <td>это</td>
+                    <td>эту</td>
+                    <td>эти/этих</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>этим</td>
+                    <td>этим</td>
+                    <td>этой</td>
+                    <td>этими</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>этом</td>
+                    <td>этом</td>
+                    <td>этой</td>
+                    <td>этих</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+            </div>
+            
+            <!-- тот (那个) -->
+            <div class="declension-table-section">
+              <h3>тот</h3>
+              <table class="other-pronoun-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>阳性</th>
+                    <th>中性</th>
+                    <th>阴性</th>
+                    <th>复数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>тот</td>
+                    <td>то</td>
+                    <td>та</td>
+                    <td>те</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>того</td>
+                    <td>того</td>
+                    <td>той</td>
+                    <td>тех</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>тому</td>
+                    <td>тому</td>
+                    <td>той</td>
+                    <td>тем</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>тот/того</td>
+                    <td>то</td>
+                    <td>ту</td>
+                    <td>те/тех</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>тем</td>
+                    <td>тем</td>
+                    <td>той</td>
+                    <td>теми</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>том</td>
+                    <td>том</td>
+                    <td>той</td>
+                    <td>тех</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+            </div>
+            
 
-          <!-- 6格 -->
-          <div class="case-rule">
-            <div class="case-header" @click="toggleCaseExpansion(6)">
-              <h3>6格（前置格）</h3>
-              <span class="expand-icon">{{ expandedCases[6] ? '▼' : '▶' }}</span>
+            
+            <!-- кто (谁) -->
+            <div class="declension-table-section">
+              <h3>кто</h3>
+              <table class="other-pronoun-table-simple">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>形式</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>кто</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>кого</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>кому</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>кого</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>кем</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>ком</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <div v-if="expandedCases[6]" class="case-content">
-              <div class="case-function">
-                <h4>功能</h4>
-                <p>表示地点或状态，通常与前置词连用。</p>
-              </div>
-              <div class="case-endings">
-                <h4>词尾变化</h4>
-                <div class="number-group">
-                  <h5>单数形式</h5>
-                  <div class="gender-group">
-                    <h6>不论性</h6>
-                    <ul>
-                      <li>一般情况下：加-е (如：стол → о столе, город → в городе)<br>特殊：重音移动（如：лес → в лесу́，сад → в саду́，мост → на мосту́，пол → на полу́，шкаф → в шкафу́，берег → на берегу́）</li>
-                      <li>阳性-ий、中性-ие、阴性-ия、-ь: 末尾变-и<br>（如：санаторий → в санатории, здание → в здании, станция → на станции, ночь → в ночи）</li>
-                    </ul>
-                  </div>
-                </div>
-                <div class="number-group">
-                  <h5>复数形式</h5>
-                  <div class="gender-group">
-                    <h6>不分性</h6>
-                    <ul>
-                      <li>一般情况：-ах (如：стол → столах，место → местах，машина → машинах)</li>
-                      <li>以-й,-ь,-я,-е结尾：-ях <br>(如：музей → в музеях, камень → на камнях, неделя → в неделях, море → в морях)</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
+            
+            <!-- что (什么) -->
+            <div class="declension-table-section">
+              <h3>что</h3>
+              <table class="other-pronoun-table-simple">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>形式</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>что</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>чего</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>чему</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>что</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>чем</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>чём</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-          </div>
+            
+            <!-- 反身代词 -->
+            <div class="declension-table-section">
+              <h3>себя</h3>
+              <table class="other-pronoun-table-simple">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>形式</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>1格</td>
+                    <td>—</td>
+                  </tr>
+                  <tr>
+                    <td>2格</td>
+                    <td>себя</td>
+                  </tr>
+                  <tr>
+                    <td>3格</td>
+                    <td>себе</td>
+                  </tr>
+                  <tr>
+                    <td>4格</td>
+                    <td>себя</td>
+                  </tr>
+                  <tr>
+                    <td>5格</td>
+                    <td>собой</td>
+                  </tr>
+                  <tr>
+                    <td>6格</td>
+                    <td>себе</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
         </div>
 
         <!-- 变格规则内容 - 电脑端左右布局 -->
         <div class="declension-rules-desktop desktop-only">
           <div class="rules-sidebar">
+            <!-- 名词分类（可折叠） -->
+            <div class="category-group">
+              <button 
+                class="category-main-btn noun-category"
+                :class="{ active: desktopExpandedCategories.noun }"
+                @click="toggleDesktopCategory('noun')"
+              >
+                <span>名词</span>
+                <svg class="expand-icon" :class="{ expanded: desktopExpandedCategories.noun }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div v-if="desktopExpandedCategories.noun" class="category-sub-buttons">
+                <button 
+                  v-for="caseNum in 6" 
+                  :key="'noun-' + caseNum"
+                  class="case-sidebar-btn"
+                  :class="{ active: selectedDesktopCase === caseNum && selectedDesktopCategory === 'noun' }"
+                  @click="toggleCaseExpansion(caseNum)"
+                >
+                  {{ caseNum }}格
+                </button>
+              </div>
+            </div>
+            
+            <!-- 形容词分类 -->
             <button 
-              v-for="caseNum in 6" 
-              :key="caseNum"
-              class="case-sidebar-btn"
-              :class="{ active: selectedDesktopCase === caseNum }"
-              @click="toggleCaseExpansion(caseNum)"
+              class="category-main-btn"
+              :class="{ active: selectedDesktopCategory === 'adjective' }"
+              @click="toggleDesktopCategory('adjective')"
             >
-              {{ caseNum }}格
+              形容词
+            </button>
+            
+            <!-- 人称代词分类 -->
+            <button 
+              class="category-main-btn"
+              :class="{ active: selectedDesktopCategory === 'personal-pronoun' }"
+              @click="toggleDesktopCategory('personal-pronoun')"
+            >
+              人称代词
+            </button>
+            
+            <!-- 物主代词分类 -->
+            <button 
+              class="category-main-btn"
+              :class="{ active: selectedDesktopCategory === 'possessive-pronoun' }"
+              @click="toggleDesktopCategory('possessive-pronoun')"
+            >
+              物主代词
+            </button>
+            
+            <!-- 其他分类 -->
+            <button 
+              class="category-main-btn"
+              :class="{ active: selectedDesktopCategory === 'other' }"
+              @click="toggleDesktopCategory('other')"
+            >
+              其他
             </button>
           </div>
           <div class="rules-content">
-            <template v-if="selectedDesktopCase !== null">
+            <template v-if="selectedDesktopCategory === 'noun' && selectedDesktopCase !== null">
               <div :key="'case-' + selectedDesktopCase">
                 <!-- 1格 -->
                 <template v-if="selectedDesktopCase === 1">
@@ -5137,6 +13225,15 @@ const shufflePossibleEndings = (sentence: any) => {
                   <div class="case-function">
                     <h4>功能</h4>
                     <p>表示动作的主体或主语，回答"谁？什么？"的问题。</p>
+                  </div>
+                  <div class="case-auxiliary">
+                    <h4>标志词</h4>
+                    <table class="auxiliary-table">
+                      <tr>
+                        <td class="auxiliary-category">动词</td>
+                        <td class="auxiliary-words">быть（есть）</td>
+                      </tr>
+                    </table>
                   </div>
                   <div class="case-endings">
                     <h4>词尾变化</h4>
@@ -5181,6 +13278,23 @@ const shufflePossibleEndings = (sentence: any) => {
                   <div class="case-function">
                     <h4>功能</h4>
                     <p>表示所属关系，回答"谁的？什么的？"的问题。</p>
+                  </div>
+                  <div class="case-auxiliary">
+                    <h4>标志词</h4>
+                    <table class="auxiliary-table">
+                      <tr>
+                        <td class="auxiliary-category">无人称谓语</td>
+                        <td class="auxiliary-words">нет</td>
+                      </tr>
+                      <tr>
+                        <td class="auxiliary-category">介词</td>
+                        <td class="auxiliary-words">у, из, из-за, от, с（从…）, до, без, для, около, после, вокруг（周围）, вместо（代替）</td>
+                      </tr>
+                      <tr>
+                        <td class="auxiliary-category">动词</td>
+                        <td class="auxiliary-words">не иметь（没有）、лишиться（失去）、достичь（达到）、касаться（涉及）、добиться（获得）</td>
+                      </tr>
+                    </table>
                   </div>
                   <div class="case-endings">
                     <h4>词尾变化</h4>
@@ -5253,6 +13367,21 @@ const shufflePossibleEndings = (sentence: any) => {
                     <h4>功能</h4>
                     <p>表示动作的间接对象，回答"给谁？对谁？"的问题。</p>
                   </div>
+                  <div class="case-auxiliary">
+                    <h4>标志词</h4>
+                    <table class="auxiliary-table">
+                    <tbody>
+                      <tr>
+                        <td class="auxiliary-category">介词</td>
+                        <td class="auxiliary-words">к, по, благодаря,<br> вопреки（与……相反）, навстречу（朝着……）</td>
+                      </tr>
+                      <tr>
+                        <td class="auxiliary-category">动词</td>
+                        <td class="auxiliary-words">сниться, рад, верить, помогать, мешать（打扰）, завидовать（嫉妒）, сочувствовать（建议）, удивляться（惊讶）, позвонить</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  </div>
                   <div class="case-endings">
                     <h4>词尾变化</h4>
                     <div class="number-groups-container">
@@ -5305,6 +13434,21 @@ const shufflePossibleEndings = (sentence: any) => {
                     <h4>功能</h4>
                     <p>表示动作的直接对象，回答"谁？什么？"的问题。</p>
                   </div>
+                  <div class="case-auxiliary">
+                    <h4>标志词</h4>
+                  <table class="auxiliary-table">
+                    <tbody>
+                      <tr>
+                        <td class="auxiliary-category">介词</td>
+                        <td class="auxiliary-words">на, в, за（向……，为了……）, про, через, сквозь（通过）, под（往……下面）</td>
+                      </tr>
+                      <tr>
+                        <td class="auxiliary-category">动词</td>
+                        <td class="auxiliary-words">видеть, любить, читать, делать, слушать, знать, ждать, есть（吃）</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  </div>
                   <div class="case-endings">
                     <h4>词尾变化</h4>
                     <div class="number-groups-container">
@@ -5354,6 +13498,21 @@ const shufflePossibleEndings = (sentence: any) => {
                     <h4>功能</h4>
                     <p>表示动作的工具或手段，回答"用什么？通过什么？"的问题。</p>
                   </div>
+                  <div class="case-auxiliary">
+                    <h4>标志词</h4>
+                    <table class="auxiliary-table">
+                      <tbody>
+                        <tr>
+                          <td class="auxiliary-category">介词</td>
+                          <td class="auxiliary-words">с, над, под, перед, между, за（在…）</td>
+                        </tr>
+                        <tr>
+                          <td class="auxiliary-category">动词</td>
+                          <td class="auxiliary-words">интересоваться（感兴趣）、гордиться（以...为荣）、обладать（拥有）、пользоваться（使用）、заниматься（从事）</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                   <div class="case-endings">
                     <h4>词尾变化</h4>
                     <div class="number-groups-container">
@@ -5398,6 +13557,17 @@ const shufflePossibleEndings = (sentence: any) => {
                     <h4>功能</h4>
                     <p>表示地点或状态，通常与前置词连用。</p>
                   </div>
+                  <div class="case-auxiliary">
+                    <h4>标志词</h4>
+                    <table class="auxiliary-table">
+                      <tbody>
+                        <tr>
+                          <td class="auxiliary-category">介词</td>
+                          <td class="auxiliary-words">о, об, в, на（在…）, при</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                   <div class="case-endings">
                     <h4>词尾变化</h4>
                     <div class="number-groups-container">
@@ -5426,6 +13596,613 @@ const shufflePossibleEndings = (sentence: any) => {
                 </template>
               </div>
             </template>
+            
+            <!-- 形容词分类内容 -->
+            <template v-else-if="selectedDesktopCategory === 'adjective'">
+              <div class="category-content">
+                <h3>形容词变格规则</h3>
+                <div class="declension-table-section">
+                  <h3>硬变化</h3>
+                  <p class="table-description">适用于词干以硬辅音结尾的形容词（如 новый、молодой）<br>特殊：词干以 г, к, х结尾的形容词（如 долгий, дорогой, русский, тихий, плохой）</p>
+                  <table class="declension-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性</th>
+                        <th>阴性</th>
+                        <th>中性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>1格</td>
+                        <td>-ый/-ой</td>
+                        <td>-ая</td>
+                        <td>-ое</td>
+                        <td>-ые</td>
+                      </tr>
+                      <tr>
+                        <td>2格</td>
+                        <td>-ого</td>
+                        <td>-ой</td>
+                        <td>同阳性</td>
+                        <td>-ых</td>
+                      </tr>
+                      <tr>
+                        <td>3格</td>
+                        <td>-ому</td>
+                        <td>-ой</td>
+                        <td>同阳性</td>
+                        <td>-ым</td>
+                      </tr>
+                      <tr>
+                        <td>4格</td>
+                        <td>1或2</td>
+                        <td>-ую</td>
+                        <td>1或2</td>
+                        <td>1或2</td>
+                      </tr>
+                      <tr>
+                        <td>5格</td>
+                        <td>-ым</td>
+                        <td>-ой(-ою)</td>
+                        <td>同阳性</td>
+                        <td>-ыми</td>
+                      </tr>
+                      <tr>
+                        <td>6格</td>
+                        <td>-ом</td>
+                        <td>-ой</td>
+                        <td>同阳性</td>
+                        <td>-ых</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+                  <p class="table-note">俄语正字法要求，词干以 г, к, х结尾的形容词复数读作гы, кы, хы，写作ги, ки, хи。</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>软变化</h3>
+                  <p class="table-description">适用于词干以软辅音结尾的形容词（如 синий, летний）</p>
+                  <table class="declension-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性</th>
+                        <th>阴性</th>
+                        <th>中性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>1格</td>
+                        <td>-ий</td>
+                        <td>-яя</td>
+                        <td>-ее</td>
+                        <td>-ие</td>
+                      </tr>
+                      <tr>
+                        <td>2格</td>
+                        <td>-его</td>
+                        <td>-ей</td>
+                        <td>同阳性</td>
+                        <td>-их</td>
+                      </tr>
+                      <tr>
+                        <td>3格</td>
+                        <td>-ему</td>
+                        <td>-ей</td>
+                        <td>同阳性</td>
+                        <td>-им</td>
+                      </tr>
+                      <tr>
+                        <td>4格</td>
+                        <td>1或2</td>
+                        <td>-юю</td>
+                        <td>-ее</td>
+                        <td>1或2</td>
+                      </tr>
+                      <tr>
+                        <td>5格</td>
+                        <td>-им</td>
+                        <td>-ей (-ею)</td>
+                        <td>同阳性</td>
+                        <td>-ими</td>
+                      </tr>
+                      <tr>
+                        <td>6格</td>
+                        <td>-ем</td>
+                        <td>-ей</td>
+                        <td>同阳性</td>
+                        <td>-их</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>特殊变化</h3>
+                  <p class="table-description">词干以咝音（ш, ж, ч, щ）结尾的形容词（如：хороший, свежий, горячий, настоящий）</p>
+                  <table class="declension-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性</th>
+                        <th>阴性</th>
+                        <th>中性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>1格</td>
+                        <td>-ий</td>
+                        <td>-ая</td>
+                        <td>-ее</td>
+                        <td>-ие</td>
+                      </tr>
+                      <tr>
+                        <td>2格</td>
+                        <td>-его</td>
+                        <td>-ей</td>
+                        <td>同阳性</td>
+                        <td>-их</td>
+                      </tr>
+                      <tr>
+                        <td>3格</td>
+                        <td>-ему</td>
+                        <td>-ей</td>
+                        <td>同阳性</td>
+                        <td>-им</td>
+                      </tr>
+                      <tr>
+                        <td>4格</td>
+                        <td>1或2</td>
+                        <td>-ую</td>
+                        <td>-ее</td>
+                        <td>1或2</td>
+                      </tr>
+                      <tr>
+                        <td>5格</td>
+                        <td>-им</td>
+                        <td>-ей (-ею)</td>
+                        <td>同阳性</td>
+                        <td>-ими</td>
+                      </tr>
+                      <tr>
+                        <td>6格</td>
+                        <td>-ем</td>
+                        <td>-ей</td>
+                        <td>同阳性</td>
+                        <td>-их</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词（如人、动物）时，4格形式等于2格</p>
+                </div>
+              </div>
+            </template>
+            
+            <!-- 人称代词分类内容 -->
+            <template v-else-if="selectedDesktopCategory === 'personal-pronoun'">
+              <div class="category-content">
+                <h3>人称代词变格规则</h3>
+                <div class="declension-table-section">
+                  <h3>单数人称代词</h3>
+                  <table class="pronoun-declension-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>第一人称</th>
+                        <th>第二人称</th>
+                        <th>第三人称</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>1格</td>
+                        <td>я</td>
+                        <td>ты</td>
+                        <td>он / оно / она</td>
+                      </tr>
+                      <tr>
+                        <td>2格</td>
+                        <td>меня</td>
+                        <td>тебя</td>
+                        <td>его / её</td>
+                      </tr>
+                      <tr>
+                        <td>3格</td>
+                        <td>мне</td>
+                        <td>тебе</td>
+                        <td>ему / ей</td>
+                      </tr>
+                      <tr>
+                        <td>4格</td>
+                        <td>меня</td>
+                        <td>тебя</td>
+                        <td>его / её</td>
+                      </tr>
+                      <tr>
+                        <td>5格</td>
+                        <td>мной (мною)</td>
+                        <td>тобой (тобою)</td>
+                        <td>им / ей (ею)</td>
+                      </tr>
+                      <tr>
+                        <td>6格</td>
+                        <td>обо мне</td>
+                        <td>о тебе</td>
+                        <td>о нём / о ней</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>复数人称代词</h3>
+                  <table class="pronoun-declension-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>第一人称</th>
+                        <th>第二人称</th>
+                        <th>第三人称</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>1格</td>
+                        <td>мы</td>
+                        <td>вы</td>
+                        <td>они</td>
+                      </tr>
+                      <tr>
+                        <td>2格</td>
+                        <td>нас</td>
+                        <td>вас</td>
+                        <td>их</td>
+                      </tr>
+                      <tr>
+                        <td>3格</td>
+                        <td>нам</td>
+                        <td>вам</td>
+                        <td>им</td>
+                      </tr>
+                      <tr>
+                        <td>4格</td>
+                        <td>нас</td>
+                        <td>вас</td>
+                        <td>их</td>
+                      </tr>
+                      <tr>
+                        <td>5格</td>
+                        <td>нами</td>
+                        <td>вами</td>
+                        <td>ими</td>
+                      </tr>
+                      <tr>
+                        <td>6格</td>
+                        <td>о нас</td>
+                        <td>о вас</td>
+                        <td>о них</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </template>
+            
+            <!-- 物主代词分类内容 -->
+            <template v-else-if="selectedDesktopCategory === 'possessive-pronoun'">
+              <div class="category-content">
+                <h3>物主代词变格规则</h3>
+                <div class="declension-table-section">
+                  <h3>мой (我的)</h3>
+                  <table class="possessive-pronoun-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性</th>
+                        <th>中性</th>
+                        <th>阴性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>мой</td><td>моё</td><td>моя</td><td>мои</td></tr>
+                      <tr><td>2格</td><td>моего</td><td>моего</td><td>моей</td><td>моих</td></tr>
+                      <tr><td>3格</td><td>моему</td><td>моему</td><td>моей</td><td>моим</td></tr>
+                      <tr><td>4格</td><td>мой/моего</td><td>моё</td><td>мою</td><td>мои/моих</td></tr>
+                      <tr><td>5格</td><td>моим</td><td>моим</td><td>моей</td><td>моими</td></tr>
+                      <tr><td>6格</td><td>моём</td><td>моём</td><td>моей</td><td>моих</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>твой (你的)</h3>
+                  <table class="possessive-pronoun-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性</th>
+                        <th>中性</th>
+                        <th>阴性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>твой</td><td>твоё</td><td>твоя</td><td>твои</td></tr>
+                      <tr><td>2格</td><td>твоего</td><td>твоего</td><td>твоей</td><td>твоих</td></tr>
+                      <tr><td>3格</td><td>твоему</td><td>твоему</td><td>твоей</td><td>твоим</td></tr>
+                      <tr><td>4格</td><td>твой/твоего</td><td>твоё</td><td>твою</td><td>твои/твоих</td></tr>
+                      <tr><td>5格</td><td>твоим</td><td>твоим</td><td>твоей</td><td>твоими</td></tr>
+                      <tr><td>6格</td><td>твоём</td><td>твоём</td><td>твоей</td><td>твоих</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>свой (自己的)</h3>
+                  <table class="possessive-pronoun-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性</th>
+                        <th>中性</th>
+                        <th>阴性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>свой</td><td>своё</td><td>своя</td><td>свои</td></tr>
+                      <tr><td>2格</td><td>своего</td><td>своего</td><td>своей</td><td>своих</td></tr>
+                      <tr><td>3格</td><td>своему</td><td>своему</td><td>своей</td><td>своим</td></tr>
+                      <tr><td>4格</td><td>свой/своего</td><td>своё</td><td>свою</td><td>свои/своих</td></tr>
+                      <tr><td>5格</td><td>своим</td><td>своим</td><td>своей</td><td>своими</td></tr>
+                      <tr><td>6格</td><td>своём</td><td>своём</td><td>своей</td><td>своих</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>наш (我们的)</h3>
+                  <table class="possessive-pronoun-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性</th>
+                        <th>中性</th>
+                        <th>阴性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>наш</td><td>наше</td><td>наша</td><td>наши</td></tr>
+                      <tr><td>2格</td><td>нашего</td><td>нашего</td><td>нашей</td><td>наших</td></tr>
+                      <tr><td>3格</td><td>нашему</td><td>нашему</td><td>нашей</td><td>нашим</td></tr>
+                      <tr><td>4格</td><td>наш/нашего</td><td>наше</td><td>нашу</td><td>наши/наших</td></tr>
+                      <tr><td>5格</td><td>нашим</td><td>нашим</td><td>нашей</td><td>нашими</td></tr>
+                      <tr><td>6格</td><td>нашем</td><td>нашем</td><td>нашей</td><td>наших</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>ваш (你们的)</h3>
+                  <table class="possessive-pronoun-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性</th>
+                        <th>中性</th>
+                        <th>阴性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>ваш</td><td>ваше</td><td>ваша</td><td>ваши</td></tr>
+                      <tr><td>2格</td><td>вашего</td><td>вашего</td><td>вашей</td><td>ваших</td></tr>
+                      <tr><td>3格</td><td>вашему</td><td>вашему</td><td>вашей</td><td>вашим</td></tr>
+                      <tr><td>4格</td><td>ваш/вашего</td><td>ваше</td><td>вашу</td><td>ваши/ваших</td></tr>
+                      <tr><td>5格</td><td>вашим</td><td>вашим</td><td>вашей</td><td>вашими</td></tr>
+                      <tr><td>6格</td><td>вашем</td><td>вашем</td><td>вашей</td><td>ваших</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>его, её, их（不变格）</h3>
+                  <table class="possessive-pronoun-table-simple">
+                    <thead>
+                      <tr>
+                        <th>阳性</th>
+                        <th>中性</th>
+                        <th>阴性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>его</td><td>его</td><td>её</td><td>их</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>весь (全部的)</h3>
+                  <table class="possessive-pronoun-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性</th>
+                        <th>中性</th>
+                        <th>阴性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>весь</td><td>всё</td><td>вся</td><td>все</td></tr>
+                      <tr><td>2格</td><td>всего</td><td>всего</td><td>всей</td><td>всех</td></tr>
+                      <tr><td>3格</td><td>всему</td><td>всему</td><td>всей</td><td>всем</td></tr>
+                      <tr><td>4格</td><td>весь/всего</td><td>всё</td><td>всю</td><td>все/всех</td></tr>
+                      <tr><td>5格</td><td>всем</td><td>всем</td><td>всей</td><td>всеми</td></tr>
+                      <tr><td>6格</td><td>всём</td><td>всём</td><td>всей</td><td>всех</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>чей (谁的)</h3>
+                  <table class="possessive-pronoun-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性</th>
+                        <th>中性</th>
+                        <th>阴性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>чей</td><td>чьё</td><td>чья</td><td>чьи</td></tr>
+                      <tr><td>2格</td><td>чьего</td><td>чьего</td><td>чьей</td><td>чьих</td></tr>
+                      <tr><td>3格</td><td>чьему</td><td>чьему</td><td>чьей</td><td>чьим</td></tr>
+                      <tr><td>4格</td><td>чей/чьего</td><td>чьё</td><td>чью</td><td>чьи/чьих</td></tr>
+                      <tr><td>5格</td><td>чьим</td><td>чьим</td><td>чьей</td><td>чьими</td></tr>
+                      <tr><td>6格</td><td>чьём</td><td>чьём</td><td>чьей</td><td>чьих</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+              </div>
+            </template>
+            
+            <!-- 其他分类内容 -->
+            <template v-else-if="selectedDesktopCategory === 'other'">
+              <div class="category-content">
+                <h3>指示代词、疑问词、反身代词变格规则</h3>
+                <div class="declension-table-section">
+                  <h3>этот (这个)</h3>
+                  <table class="other-pronoun-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性</th>
+                        <th>中性</th>
+                        <th>阴性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>этот</td><td>это</td><td>эта</td><td>эти</td></tr>
+                      <tr><td>2格</td><td>этого</td><td>этого</td><td>этой</td><td>этих</td></tr>
+                      <tr><td>3格</td><td>этому</td><td>этому</td><td>этой</td><td>этим</td></tr>
+                      <tr><td>4格</td><td>этот/этого</td><td>это</td><td>эту</td><td>эти/этих</td></tr>
+                      <tr><td>5格</td><td>этим</td><td>этим</td><td>этой</td><td>этими</td></tr>
+                      <tr><td>6格</td><td>этом</td><td>этом</td><td>этой</td><td>этих</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>тот (那个)</h3>
+                  <table class="other-pronoun-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性</th>
+                        <th>中性</th>
+                        <th>阴性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>тот</td><td>то</td><td>та</td><td>те</td></tr>
+                      <tr><td>2格</td><td>того</td><td>того</td><td>той</td><td>тех</td></tr>
+                      <tr><td>3格</td><td>тому</td><td>тому</td><td>той</td><td>тем</td></tr>
+                      <tr><td>4格</td><td>тот/того</td><td>то</td><td>ту</td><td>те/тех</td></tr>
+                      <tr><td>5格</td><td>тем</td><td>тем</td><td>той</td><td>теми</td></tr>
+                      <tr><td>6格</td><td>том</td><td>том</td><td>той</td><td>тех</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>кто (谁)</h3>
+                  <table class="other-pronoun-table-simple">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>形式</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>кто</td></tr>
+                      <tr><td>2格</td><td>кого</td></tr>
+                      <tr><td>3格</td><td>кому</td></tr>
+                      <tr><td>4格</td><td>кого</td></tr>
+                      <tr><td>5格</td><td>кем</td></tr>
+                      <tr><td>6格</td><td>ком</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>что (什么)</h3>
+                  <table class="other-pronoun-table-simple">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>形式</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>что</td></tr>
+                      <tr><td>2格</td><td>чего</td></tr>
+                      <tr><td>3格</td><td>чему</td></tr>
+                      <tr><td>4格</td><td>что</td></tr>
+                      <tr><td>5格</td><td>чем</td></tr>
+                      <tr><td>6格</td><td>чём</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>себя (反身代词)</h3>
+                  <table class="other-pronoun-table-simple">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>形式</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>—</td></tr>
+                      <tr><td>2格</td><td>себя</td></tr>
+                      <tr><td>3格</td><td>себе</td></tr>
+                      <tr><td>4格</td><td>себя</td></tr>
+                      <tr><td>5格</td><td>собой</td></tr>
+                      <tr><td>6格</td><td>себе</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </template>
+            
+            <!-- 默认提示 -->
             <template v-else>
               <div class="default-message">
                 <p>点击左侧按钮查看相应规则</p>
@@ -5488,35 +14265,433 @@ const shufflePossibleEndings = (sentence: any) => {
           </div>
         </div>
       </div>
+
+      <!-- 形容词和物主代词训练页面 -->
+      <div v-else-if="currentPage === 'adj-training' || currentPage === 'poss-training'" class="page-content page-full-width">
+        <!-- 形容词和物主代词训练的性别选择界面 -->
+        <div v-if="adjPossTrainingState === 'select-gender'" class="case-select-container">
+          <h2>{{ currentAdjPossType === 'adjective' ? '形容词训练' : '物主代词训练' }}</h2>
+          <p class="instruction">请选择要训练的性：</p>
+          <div class="case-buttons">
+            <button 
+              class="case-btn"
+              @click="selectGender('阳性/中性')"
+            >
+              阳性/中性单数
+            </button>
+            <button 
+              class="case-btn"
+              @click="selectGender('阴性')"
+            >
+              阴性单数
+            </button>
+            <button 
+              class="case-btn"
+              @click="selectGender('复数')"
+            >
+              复数
+            </button>
+          </div>
+        </div>
+        <!-- 训练界面 -->
+        <div v-else-if="adjPossTrainingState === 'practice'" class="practice-container">
+          <div class="practice-header">
+            <button class="back-btn" @click="backToGenderSelect">
+              <ArrowLeft class="back-icon" />
+            </button>
+            <h2>{{ selectedGender }}</h2>
+          </div>
+          <div class="practice-content">
+            <!-- 提示文字 -->
+            <p class="hint-text">{{ currentAdjPossType === 'adjective' ? '点击高亮的形容词进行变格' : '点击高亮的物主代词进行变格' }}</p>
+            
+            <!-- 句子展示 -->
+            <div class="sentence-container" v-if="currentAdjectiveSentence">
+              <p class="sentence" v-html="adjectiveFullSentenceHtml" @click="handleAdjectiveSentenceClick($event)"></p>
+              <!-- 词尾选择下拉菜单 -->
+              <div 
+                class="dropdown-container" 
+                v-if="adjectiveShowDropdown && currentAdjectiveSentence" 
+                :style="{ position: 'fixed', top: adjectiveDropdownTop + 'px', left: adjectiveDropdownLeft + 'px', zIndex: 1000 }"
+              >
+                <div class="dropdown">
+                  <div 
+                    v-for="(ending, index) in currentAdjectiveSentence.possibleEndings" 
+                    :key="index"
+                    class="dropdown-item"
+                    @click="chooseAdjectiveEnding(ending)"
+                  >
+                    {{ ending }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 答案结果 -->
+            <div class="result-container" v-if="adjectiveShowResult && currentAdjectiveSentence">
+              <div class="result-icon" :class="adjectiveAnswerResult">
+                {{ adjectiveAnswerResult === 'correct' ? '✔' : '❌' }}
+              </div>
+              <div class="result-message">
+                <p v-if="adjectiveAnswerResult === 'correct'" class="correct-message">
+                  正确！
+                </p>
+                <p v-else-if="adjectiveAnswerResult === 'incorrect'" class="incorrect-message">
+                  错误！
+                </p>
+                <p class="explanation" v-if="adjectiveAnswerResult === 'incorrect'">
+                  正确答案：
+                  <span>{{ currentAdjectiveSentence.correctEnding === '/' ? currentAdjectiveSentence.targetWord : currentAdjectiveSentence.correctEnding }}</span>
+                </p>
+                <p class="explanation">
+                  {{ currentAdjectiveSentence.explanation }}
+                </p>
+              </div>
+              <button class="next-btn" @click="adjectiveNextQuestion">
+                下一题
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 人称代词训练页面 -->
+      <div v-else-if="currentPage === 'pronoun-training'" class="page-content page-full-width">
+        <!-- 人称代词训练的人称选择界面 -->
+        <div v-if="pronounTrainingState === 'select-person'" class="case-select-container">
+          <h2>人称代词训练</h2>
+          <p class="instruction">请选择要训练的人称：</p>
+          <div class="case-buttons">
+            <button 
+              class="case-btn"
+              @click="selectPerson('单数人称')"
+            >
+              单数人称
+            </button>
+            <button 
+              class="case-btn"
+              @click="selectPerson('复数人称')"
+            >
+              复数人称
+            </button>
+          </div>
+        </div>
+        <!-- 训练界面（后续实现） -->
+        <div v-else-if="pronounTrainingState === 'practice'" class="practice-container">
+          <div class="practice-header">
+            <button class="back-btn" @click="backToPersonSelect">
+              <ArrowLeft class="back-icon" />
+            </button>
+            <h2>{{ selectedPerson }}</h2>
+          </div>
+          <div class="practice-content">
+            <p class="hint-text">点击高亮的人称代词进行变格</p>
+            <div v-if="currentPersonalPronounSentence" class="sentence-container" @click="handlePersonalPronounSentenceClick">
+              <p class="sentence" v-html="personalPronounFullSentenceHtml"></p>
+              
+              <!-- 下拉菜单 -->
+              <div v-if="personalPronounShowDropdown" class="dropdown-container" :style="{ top: adjectiveDropdownTop + 'px', left: adjectiveDropdownLeft + 'px' }">
+                <div class="dropdown">
+                  <button 
+                    v-for="(ending, index) in currentPersonalPronounSentence.possibleEndings" 
+                    :key="index"
+                    class="dropdown-item"
+                    @click.stop="choosePersonalPronounEnding(ending)"
+                  >
+                    {{ ending }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 答案结果 -->
+            <div v-if="personalPronounShowResult && currentPersonalPronounSentence" class="result-container">
+              <div class="result-icon" :class="personalPronounAnswerResult">
+                {{ personalPronounAnswerResult === 'correct' ? '✔' : '❌' }}
+              </div>
+              <div class="result-message">
+                <p v-if="personalPronounAnswerResult === 'correct'" class="correct-message">
+                  正确！
+                </p>
+                <p v-else-if="personalPronounAnswerResult === 'incorrect'" class="incorrect-message">
+                  错误！
+                </p>
+                <p class="explanation" v-if="personalPronounAnswerResult === 'incorrect'">
+                  正确答案：
+                  <span>{{ currentPersonalPronounSentence.correctEnding }}</span>
+                </p>
+                <p class="explanation">
+                  {{ currentPersonalPronounSentence.explanation }}
+                </p>
+              </div>
+              <button class="next-btn" @click="personalPronounNextQuestion">
+                下一题
+              </button>
+            </div>
+            <p v-else-if="!currentPersonalPronounSentence" class="hint-text">加载中...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 组合训练选择页面 -->
+      <div v-else-if="currentPage === 'combined-training'" class="page-content page-full-width">
+        <div class="case-select-container">
+          <h2>组合训练</h2>
+          <p class="instruction">请选择要训练的组合类型：</p>
+          <div class="case-buttons">
+            <button 
+              class="case-btn"
+              @click="navigateTo('adj-noun-combined')"
+            >
+              形容词+名词
+            </button>
+            <button 
+              class="case-btn"
+              @click="navigateTo('poss-noun-combined')"
+            >
+              物主代词+名词
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 形容词+名词组合训练页面 -->
+      <div v-else-if="currentPage === 'adj-noun-combined'" class="page-content page-full-width">
+        <div class="practice-container">
+          <div class="practice-header">
+            <button class="back-btn" @click="navigateTo('combined-training')">
+              <ArrowLeft class="back-icon" />
+            </button>
+            <h2>形容词+名词</h2>
+          </div>
+          <div class="practice-content">
+            <!-- 要求信息 -->
+            <div v-if="currentAdjNounSentence" class="hint-text">
+              <p v-if="currentAdjNounSentence.number === '单数'">
+                要求：将形容词和名词变为相应格的<strong class="highlight-number">单数形式</strong>
+              </p>
+              <p v-else>
+                要求：将形容词和名词变为相应格的<strong class="highlight-number">复数形式</strong>
+              </p>
+            </div>
+            
+            <div v-if="currentAdjNounSentence" class="sentence-container">
+              <div class="sentence-content">
+                <p class="sentence">
+                  <template v-for="(part, index) in getAdjNounSentenceParts" :key="index">
+                    <span v-if="part.type === 'text'">{{ part.content }}</span>
+                    <span v-else-if="part.type === 'adjective'" 
+                          class="target-word adj-noun-target adj-word" 
+                          :class="{ 'selected': adjNounSelectedAdjective, 'has-blue-underline': adjNounSelectedAdjective }"
+                          @click="handleAdjectiveClick($event)">
+                      {{ adjNounSelectedAdjective || part.content }}
+                    </span>
+                    <span v-else-if="part.type === 'noun'" 
+                          class="target-word adj-noun-target noun-word" 
+                          :class="{ 'selected': adjNounSelectedNoun, 'has-red-underline': adjNounSelectedNoun }"
+                          @click="handleNounClick($event)">
+                      {{ adjNounSelectedNoun || part.content }}
+                    </span>
+                  </template>
+                </p>
+                
+                <!-- 右侧提交按钮（仅电脑端） -->
+                <div class="right-submit-btn-container">
+                  <button v-if="!adjNounShowResult" class="desktop-submit-btn right-submit-btn" @click="checkAdjNounAnswer" :disabled="!adjNounSelectedAdjective || !adjNounSelectedNoun">
+                    提交
+                  </button>
+                </div>
+              </div>
+              
+              <!-- 形容词下拉菜单 -->
+              <div v-if="adjNounShowDropdown === 'adjective'" 
+                   class="dropdown-container" 
+                   :style="{ top: adjNounDropdownTop + 'px', left: adjNounDropdownLeft + 'px' }">
+                <div class="dropdown">
+                  <button 
+                    v-for="(option, index) in currentAdjNounSentence.adjectiveOptions" 
+                    :key="index"
+                    class="dropdown-item"
+                    @click.stop="chooseAdjective(option)"
+                  >
+                    {{ option }}
+                  </button>
+                </div>
+              </div>
+              
+              <!-- 名词下拉菜单 -->
+              <div v-if="adjNounShowDropdown === 'noun'" 
+                   class="dropdown-container" 
+                   :style="{ top: adjNounDropdownTop + 'px', left: adjNounDropdownLeft + 'px' }">
+                <div class="dropdown">
+                  <button 
+                    v-for="(option, index) in currentAdjNounSentence.nounOptions" 
+                    :key="index"
+                    class="dropdown-item"
+                    @click.stop="chooseNoun(option)"
+                  >
+                    {{ option }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 提交按钮 -->
+            <div v-if="currentAdjNounSentence && !adjNounShowResult" class="input-container">
+              <button class="submit-btn" @click="checkAdjNounAnswer" :disabled="!adjNounSelectedAdjective || !adjNounSelectedNoun">
+                提交
+              </button>
+            </div>
+            
+            <!-- 答案结果 -->
+            <div v-if="adjNounShowResult && currentAdjNounSentence" class="result-container">
+              <div class="result-icon" :class="adjNounAnswerResult">
+                {{ adjNounAnswerResult === 'correct' ? '✔' : '❌' }}
+              </div>
+              <div class="result-message">
+                <p v-if="adjNounAnswerResult === 'correct'" class="correct-message">
+                  正确！
+                </p>
+                <p v-else-if="adjNounAnswerResult === 'incorrect'" class="incorrect-message">
+                  错误！
+                </p>
+                <p class="explanation" v-if="adjNounAnswerResult === 'incorrect'">
+                  正确答案：
+                  <span>{{ currentAdjNounSentence.correctAnswer }}</span>
+                </p>
+                <p class="explanation">
+                  {{ currentAdjNounSentence.explanation }}
+                </p>
+              </div>
+              <button class="next-btn" @click="adjNounNextQuestion">
+                下一题
+              </button>
+            </div>
+            <p v-else-if="!currentAdjNounSentence" class="hint-text">加载中...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 物主代词+名词组合训练页面 -->
+      <div v-else-if="currentPage === 'poss-noun-combined'" class="page-content page-full-width">
+        <div class="practice-container">
+          <div class="practice-header">
+            <button class="back-btn" @click="navigateTo('combined-training')">
+              <ArrowLeft class="back-icon" />
+            </button>
+            <h2>物主代词+名词</h2>
+          </div>
+          <div class="practice-content">
+            <!-- 要求信息 -->
+            <div v-if="currentPossNounSentence" class="hint-text">
+              <p v-if="currentPossNounSentence.number === '单数'">
+                要求：将物主代词和名词变为相应格的<strong class="highlight-number">单数形式</strong>
+              </p>
+              <p v-else>
+                要求：将物主代词和名词变为相应格的<strong class="highlight-number">复数形式</strong>
+              </p>
+            </div>
+            
+            <div v-if="currentPossNounSentence" class="sentence-container">
+              <div class="sentence-content">
+                <p class="sentence">
+                  <template v-for="(part, index) in getPossNounSentenceParts" :key="index">
+                    <span v-if="part.type === 'text'">{{ part.content }}</span>
+                    <span v-else-if="part.type === 'pronoun'" 
+                          class="target-word poss-noun-target pronoun-word" 
+                          :class="{ 'selected': possNounSelectedPronoun, 'has-blue-underline': possNounSelectedPronoun }"
+                          @click="handlePronounClick($event)">
+                      {{ possNounSelectedPronoun || part.content }}
+                    </span>
+                    <span v-else-if="part.type === 'noun'" 
+                          class="target-word poss-noun-target noun-word" 
+                          :class="{ 'selected': possNounSelectedNoun, 'has-red-underline': possNounSelectedNoun }"
+                          @click="handlePossNounClick($event)">
+                      {{ possNounSelectedNoun || part.content }}
+                    </span>
+                  </template>
+                </p>
+                
+                <!-- 右侧提交按钮（仅电脑端） -->
+                <div class="right-submit-btn-container">
+                  <button v-if="!possNounShowResult" class="desktop-submit-btn right-submit-btn" @click="checkPossNounAnswer" :disabled="!possNounSelectedPronoun || !possNounSelectedNoun">
+                    提交
+                  </button>
+                </div>
+              </div>
+              
+              <!-- 物主代词下拉菜单 -->
+              <div v-if="possNounShowDropdown === 'pronoun'" 
+                   class="dropdown-container" 
+                   :style="{ top: possNounDropdownTop + 'px', left: possNounDropdownLeft + 'px' }">
+                <div class="dropdown">
+                  <button 
+                    v-for="(option, index) in currentPossNounSentence.pronounOptions" 
+                    :key="index"
+                    class="dropdown-item"
+                    @click.stop="choosePronoun(option)"
+                  >
+                    {{ option }}
+                  </button>
+                </div>
+              </div>
+              
+              <!-- 名词下拉菜单 -->
+              <div v-if="possNounShowDropdown === 'noun'" 
+                   class="dropdown-container" 
+                   :style="{ top: possNounDropdownTop + 'px', left: possNounDropdownLeft + 'px' }">
+                <div class="dropdown">
+                  <button 
+                    v-for="(option, index) in currentPossNounSentence.nounOptions" 
+                    :key="index"
+                    class="dropdown-item"
+                    @click.stop="choosePossNoun(option)"
+                  >
+                    {{ option }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 提交按钮 -->
+            <div v-if="currentPossNounSentence && !possNounShowResult" class="input-container">
+              <button class="submit-btn" @click="checkPossNounAnswer" :disabled="!possNounSelectedPronoun || !possNounSelectedNoun">
+                提交
+              </button>
+            </div>
+            
+            <!-- 答案结果 -->
+            <div v-if="possNounShowResult && currentPossNounSentence" class="result-container">
+              <div class="result-icon" :class="possNounAnswerResult">
+                {{ possNounAnswerResult === 'correct' ? '✔' : '❌' }}
+              </div>
+              <div class="result-message">
+                <p v-if="possNounAnswerResult === 'correct'" class="correct-message">
+                  正确！
+                </p>
+                <p v-else-if="possNounAnswerResult === 'incorrect'" class="incorrect-message">
+                  错误！
+                </p>
+                <p class="explanation" v-if="possNounAnswerResult === 'incorrect'">
+                  正确答案：
+                  <span>{{ currentPossNounSentence.correctAnswer }}</span>
+                </p>
+                <p class="explanation">
+                  {{ currentPossNounSentence.explanation }}
+                </p>
+              </div>
+              <button class="next-btn" @click="possNounNextQuestion">
+                下一题
+              </button>
+            </div>
+            <p v-else-if="!currentPossNounSentence" class="hint-text">加载中...</p>
+          </div>
+        </div>
+      </div>
     </main>
 
     <!-- 底部栏 -->
-    <footer class="footer">
-      <button 
-        class="footer-btn" 
-        :class="{ active: currentPage === 'declension-rules' }"
-        @click="navigateTo('declension-rules')"
-      >
-        <Document class="footer-icon" />
-        <span class="footer-text">变格规则</span>
-      </button>
-      <button 
-        class="footer-btn" 
-        :class="{ active: currentPage === 'home' }"
-        @click="navigateTo('home')"
-      >
-        <HomeFilled class="footer-icon" />
-        <span class="footer-text">主页</span>
-      </button>
-      <button 
-        class="footer-btn" 
-        :class="{ active: currentPage === 'profile' }"
-        @click="navigateTo('profile')"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="footer-icon"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-        <span class="footer-text">历史</span>
-      </button>
-    </footer>
+    <!-- 底部栏已移除，使用侧边栏导航 -->
   </div>
 </template>
 
@@ -5623,86 +14798,384 @@ body {
 /* 头部栏样式 */
 .header {
   background-color: #ffffff;
-  padding: 2rem;
+  padding: 1rem;
   text-align: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   width: 100%;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.header-nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.header-nav-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  background-color: white;
+  color: #3498db;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.header-nav-btn:hover {
+  background-color: #e8f4fc;
+}
+
+.header-nav-btn.active {
+  background-color: #3498db;
+  color: white;
 }
 
 .main-title {
-  font-size: 2.2rem;
-  font-weight: bold;
-  color: #2c3e50;
+  font-size: 3rem;
+  font-weight: 900;
+  color: #000000;
   margin: 0;
   text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  letter-spacing: 0.05em;
+  font-family: "Bahnschrift", "Helvetica", sans-serif;
+  transform: skewX(-12deg);
+  line-height: 1;
+  position: relative;
+  cursor: pointer;
 }
 
-.sub-title {
-  font-size: 0.9rem;
-  color: #7f8c8d;
-  margin: 0px;
-  position: absolute;
-  bottom: 0.8rem;
-  left: 50%;
-  top:68%;
-  transform: translateX(-50%);
-  width: 100%;
+/* 苏联至上主义风格字母样式 */
+.tech-letter {
+  position: relative;
+  display: inline-block;
+  font-weight: 900;
+  font-stretch: condensed;
+  letter-spacing: -0.05em;
+  transform: skewX(3deg);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: visible;
 }
+
+/* 蓝色部分样式 */
+.tech-letter.blue-section {
+  position: relative;
+  color: #000000;
+  transition: color 0.3s ease;
+}
+
+.tech-letter.blue-section::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: -5%;
+  width: 110%;
+  height: 3px;
+  background-color: #3498db;
+  opacity: var(--after-opacity, 1);
+  transition: opacity 0.3s ease;
+}
+
+
+
+/* 红色部分样式 */
+.tech-letter.red-section {
+  position: relative;
+  color: #000000;
+  transition: color 0.3s ease;
+}
+
+.tech-letter.red-section::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: -5%;
+  width: 110%;
+  height: 3px;
+  background-color: #e74c3c;
+  opacity: var(--after-opacity, 1);
+  transition: opacity 0.3s ease;
+}
+
+
+
+
+
+/* 蓝色点缀字母 - 苏联风格 */
+.tech-letter.tech-blue {
+  color: #000000;
+  position: relative;
+  transform: skewX(3deg);
+}
+
+/* 欢迎语样式 */
+.welcome-message {
+  text-align: center;
+  font-size: 1rem;
+  color: #999999;
+  margin-bottom: 2rem;
+  line-height: 1.4;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+
 
 /* 内容区样式 */
 .content {
   flex: 1;
-  padding: 1.5rem;
+  padding: 1rem;
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
 }
 
-/* 移动端页面内容垂直居中 */
+/* 移动端页面内容 */
 @media (max-width: 768px) {
   .content {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+    display: block;
   }
   
   .page-content {
-    margin-bottom: auto;
+    margin-bottom: 2rem;
   }
 }
 
 /* 主页内容 */
 .home-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1.2rem;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
   align-items: center;
-  justify-content: center;
-  min-height: 60vh;
+  justify-items: center;
   padding: 1rem;
+}
+
+/* 欢迎语容器 */
+.welcome-message {
+  grid-column: 1 / -1;
+  margin-bottom: 1rem;
+}
+
+/* 移动端欢迎语上方留白 */
+@media (max-width: 768px) {
+  .welcome-message {
+    margin-top: 1.5rem;
+  }
 }
 
 /* 训练按钮样式 */
 .training-btn {
-  padding: 0.8rem 1.5rem;
-  font-size: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.8rem 0.6rem;
+  font-size: 0.75rem;
   font-weight: 500;
-  background-color: #3498db;
-  color: white;
-  border: none;
-  border-radius: 8px;
+  background: #ffffff;
+  color: #3498db;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.04), -3px -3px 6px rgba(255, 255, 255, 0.9);
   text-align: center;
-  min-width: 200px;
+  min-width: 100px;
+  max-width: 120px;
+  height: 120px;
+  margin: 0.4rem;
+  position: relative;
+  overflow: hidden;
 }
 
 .training-btn:hover {
-  background-color: #2980b9;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+  background: #ffffff;
+  border-color: #d4e6f1;
+  transform: translateY(-4px) scale(1.03);
+  box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.06), -5px -5px 10px rgba(255, 255, 255, 0.95);
+}
+
+.training-btn:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.04), -2px -2px 4px rgba(255, 255, 255, 0.85);
+}
+
+/* 按钮图标 */
+.training-btn .btn-icon {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 0.6rem;
+  display: block;
+  color: #3498db;
+  transition: all 0.3s ease;
+}
+
+.training-btn:hover .btn-icon {
+  transform: scale(1.1);
+}
+
+/* 按钮文字 */
+.training-btn .btn-text {
+  font-size: 0.85rem;
+  line-height: 1.2;
+  text-align: center;
+  color: #3498db;
+  margin-top: 0.4rem;
+  transition: all 0.3s ease;
+}
+
+.training-btn:hover .btn-text {
+  color: #3498db;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  /* 小屏幕标题大小 */
+  .main-title {
+    font-size: 2.5rem;
+  }
+  
+  /* 移动端标题样式 */
+  .tech-letter.blue-section {
+    color: #000000;
+  }
+  
+  .tech-letter.red-section {
+    color: #000000;
+  }
+  
+  .tech-letter.blue-section::after,
+  .tech-letter.red-section::after {
+    display: block;
+    opacity: 1 !important;
+  }
+  
+  .tech-letter.blue-section:hover,
+  .tech-letter.red-section:hover {
+    color: inherit;
+  }
+}
+
+@media (max-width: 767px) {
+  /* 移动端标题大小 */
+  .main-title {
+    font-size: 2.5rem;
+  }
+  
+  .home-content {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.8rem;
+    padding: 0.8rem;
+    justify-items: center;
+    align-items: center;
+  }
+  
+  .training-btn {
+    width: 90px;
+    height: 110px;
+    padding: 0.8rem 0.6rem;
+    margin: 0;
+    flex: none;
+    background: linear-gradient(145deg, #ffffff, #f8f9fa);
+    color: #3498db;
+    border: 1px solid #e8e8e8;
+    box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.04), -3px -3px 6px rgba(255, 255, 255, 0.9);
+  }
+  
+  .training-btn .btn-icon {
+    width: 28px;
+    height: 28px;
+    margin-bottom: 0.4rem;
+    color: #3498db;
+  }
+  
+  .training-btn .btn-text {
+    font-size: 0.8rem;
+    margin-top: 0.4rem;
+    color: #3498db;
+  }
+  
+  .training-btn:hover {
+    background: linear-gradient(145deg, #ffffff, #f8f9fa);
+    border-color: #e8e8e8;
+    transform: none;
+    box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.04), -3px -3px 6px rgba(255, 255, 255, 0.9);
+  }
+  
+  .training-btn:active {
+    transform: none;
+    box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.04), -2px -2px 4px rgba(255, 255, 255, 0.9);
+  }
+  
+  .training-btn:hover .btn-icon {
+    transform: none;
+  }
+  
+  .training-btn:hover .btn-text {
+    color: #3498db;
+  }
+}
+
+/* 小屏幕设备 */
+@media (max-width: 360px) {
+  .home-content {
+    gap: 0.6rem;
+    padding: 0.6rem;
+  }
+  
+  .training-btn {
+    width: 80px;
+    height: 100px;
+    padding: 0.6rem 0.4rem;
+    background: linear-gradient(145deg, #ffffff, #f8f9fa);
+    color: #3498db;
+    border: 1px solid #e8e8e8;
+    box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.04), -3px -3px 6px rgba(255, 255, 255, 0.9);
+  }
+  
+  .training-btn .btn-icon {
+    width: 26px;
+    height: 26px;
+    margin-bottom: 0.3rem;
+    color: #3498db;
+  }
+  
+  .training-btn .btn-text {
+    font-size: 0.75rem;
+    color: #3498db;
+  }
+  
+  .training-btn:hover {
+    background: linear-gradient(145deg, #ffffff, #f8f9fa);
+    border-color: #e8e8e8;
+    transform: none;
+    box-shadow: 6px 6px 12px rgba(0, 0, 0, 0.08), -6px -6px 12px rgba(255, 255, 255, 0.9);
+  }
+  
+  .training-btn:active {
+    transform: none;
+    box-shadow: 6px 6px 12px rgba(0, 0, 0, 0.08), -6px -6px 12px rgba(255, 255, 255, 0.9);
+  }
+  
+  .training-btn:hover .btn-icon {
+    transform: none;
+  }
+  
+  .training-btn:hover .btn-text {
+    color: #3498db;
+  }
 }
 
 /* 页面内容样式 */
@@ -5744,6 +15217,82 @@ body {
   margin-bottom: 1.5rem;
   text-align: center;
   font-size: 0.9rem;
+}
+
+/* 分类导航条样式 */
+.rules-category-nav {
+  margin: 20px 0;
+  background-color: white;
+  overflow: hidden;
+  width: 100%;
+  border-bottom: solid 1px #efefef;
+  padding-bottom: 8px;
+}
+
+.category-scroll {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  gap: 0;
+  padding: 0 10px;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.category-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.category-btn {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 12px 10px;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+  font-size: 0.85rem;
+  color: #666;
+  cursor: pointer;
+  transition: none;
+  position: relative;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.category-btn::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%) scaleX(0);
+  width: 60%;
+  height: 3px;
+  background-color: #3498db;
+  transition: transform 0.2s ease;
+}
+
+.category-btn.active {
+  color: #3498db;
+  font-weight: bold;
+}
+
+.category-btn.active::after {
+  transform: translateX(-50%) scaleX(1);
+}
+
+/* 占位内容样式 */
+.placeholder-content {
+  padding: 40px 20px;
+  text-align: center;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+.placeholder-text {
+  color: #999;
+  font-size: 1.1rem;
 }
 
 /* 变格规则页面折叠功能样式 */
@@ -5796,6 +15345,78 @@ body {
   margin-bottom: 5px;
   color: #34495e;
   font-size: 1rem;
+}
+
+.case-auxiliary {
+  margin-bottom: 15px;
+  padding: 10px 15px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #3498db;
+}
+
+.case-auxiliary h4 {
+  margin-bottom: 8px;
+  color: #34495e;
+  font-size: 0.95rem;
+}
+
+.auxiliary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.auxiliary-table tr {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.auxiliary-table tr:last-child {
+  border-bottom: none;
+}
+
+.auxiliary-category {
+  width: 80px;
+  padding: 6px 8px;
+  color: #7f8c8d;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+.auxiliary-words {
+  padding: 6px 8px;
+  color: #2c3e50;
+  line-height: 1.4;
+  text-align: left;
+  font-size: 0.8rem;
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+.auxiliary-section {
+  margin-bottom: 10px;
+}
+
+.auxiliary-section:last-child {
+  margin-bottom: 0;
+}
+
+.auxiliary-section h5 {
+  margin-bottom: 5px;
+  color: #7f8c8d;
+  font-size: 0.85rem;
+}
+
+.auxiliary-section ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.auxiliary-section li {
+  margin-bottom: 4px;
+  color: #2c3e50;
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 
 .case-endings h4 {
@@ -5878,11 +15499,22 @@ body {
   border-radius: 4px;
   transition: all 0.3s ease;
   color: #7f8c8d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .back-btn:hover {
   background-color: #ecf0f1;
   color: #2c3e50;
+}
+
+/* 为back-btn内的图标添加样式 */
+.back-btn .back-icon {
+  font-size: 1rem;
+  width: 20px;
+  height: 20px;
+  display: inline-block;
 }
 
 .tutorial-content {
@@ -5982,6 +15614,7 @@ body {
   left: 50%;
   transform: translateX(-50%);
   margin: 0;
+  white-space: nowrap;
 }
 
 .practice-content {
@@ -5991,6 +15624,12 @@ body {
   padding: 1.5rem;
   background-color: #f8f9fa;
   border-radius: 8px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.practice-content::-webkit-scrollbar {
+  display: none;
 }
 
 .sentence-container {
@@ -5998,6 +15637,104 @@ body {
   padding: 1rem;
   border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 句子内容容器 */
+.sentence-content {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+/* 右侧提交按钮容器 */
+.right-submit-btn-container {
+  display: none;
+}
+
+/* 右侧提交按钮 */
+.right-submit-btn {
+  padding: 0.5rem;
+  font-size: 0.8rem;
+}
+
+/* 电脑端样式 */
+@media (min-width: 769px) {
+  .right-submit-btn-container {
+    display: block;
+    position: absolute;
+    right: 13%;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+  }
+  
+  .page-full-width .practice-content .input-container {
+    display: none;
+  }
+  
+  .desktop-submit-btn.right-submit-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    min-width: auto;
+  }
+  
+  .sentence {
+    text-align: center;
+    margin: 0 auto;
+  }
+
+  .header {
+    padding: 1rem 2rem;
+    justify-content: space-between;
+  }
+
+  .main-title {
+    font-size: 2.5rem;
+    margin-left: 3rem;
+  }
+
+  .header-nav {
+    display: flex;
+  }
+
+  .footer {
+    display: none;
+  }
+
+  .declension-rules-desktop .declension-table {
+    font-size: 0.9rem;
+  }
+
+  .declension-rules-desktop .declension-table th,
+  .declension-rules-desktop .declension-table td {
+    padding: 8px 12px;
+  }
+
+  .declension-rules-desktop .table-note {
+    font-size: 0.85rem;
+  }
+
+  .declension-rules-desktop .pronoun-declension-table,
+  .declension-rules-desktop .possessive-pronoun-table,
+  .declension-rules-desktop .possessive-pronoun-table-simple,
+  .declension-rules-desktop .other-pronoun-table,
+  .declension-rules-desktop .other-pronoun-table-simple {
+    font-size: 0.9rem;
+  }
+
+  .declension-rules-desktop .pronoun-declension-table th,
+  .declension-rules-desktop .pronoun-declension-table td,
+  .declension-rules-desktop .possessive-pronoun-table th,
+  .declension-rules-desktop .possessive-pronoun-table td,
+  .declension-rules-desktop .possessive-pronoun-table-simple th,
+  .declension-rules-desktop .possessive-pronoun-table-simple td,
+  .declension-rules-desktop .other-pronoun-table th,
+  .declension-rules-desktop .other-pronoun-table td,
+  .declension-rules-desktop .other-pronoun-table-simple th,
+  .declension-rules-desktop .other-pronoun-table-simple td {
+    padding: 8px 12px;
+  }
 }
 
 .sentence {
@@ -6017,6 +15754,67 @@ body {
 .sentence strong {
   color: #3498db;
   position: relative;
+}
+
+/* 目标词样式 */
+.target-word {
+  color: #3498db;
+  font-weight: bold;
+  cursor: pointer;
+  position: relative;
+}
+
+.target-word:hover {
+  color: #2980b9;
+}
+
+/* 形容词+名词训练目标词样式 */
+.adj-noun-target {
+  color: #000000;
+  font-weight: bold;
+  cursor: pointer;
+  position: relative;
+  padding: 0 2px;
+}
+
+.adj-noun-target:hover {
+  background-color: #f0f0f0;
+}
+
+/* 物主代词+名词训练目标词样式 */
+.poss-noun-target {
+  color: #000000;
+  font-weight: bold;
+  cursor: pointer;
+  position: relative;
+  padding: 0 2px;
+}
+
+.poss-noun-target:hover {
+  background-color: #f0f0f0;
+}
+
+/* 形容词蓝色下划线 */
+.has-blue-underline {
+  border-bottom: 2px solid #3498db;
+}
+
+/* 名词红色下划线 */
+.has-red-underline {
+  border-bottom: 2px solid #e74c3c;
+}
+
+/* 高亮数字样式 */
+.highlight-number {
+  color: #f29620;
+  font-weight: bold;
+}
+
+/* 移动端高亮数字换行 */
+@media (max-width: 768px) {
+  .highlight-number {
+    display: inline-block;
+  }
 }
 
 .word-selection {
@@ -6103,7 +15901,7 @@ body {
 }
 
 /* 提交按钮样式 */
-.submit-btn {
+.submit-btn, .desktop-submit-btn {
   padding: 0.8rem 1.5rem;
   font-size: 1rem;
   font-weight: 500;
@@ -6118,13 +15916,13 @@ body {
   min-width: 120px;
 }
 
-.submit-btn:hover:not(:disabled) {
+.submit-btn:hover:not(:disabled), .desktop-submit-btn:hover:not(:disabled) {
   background-color: #2980b9;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(52, 152, 219, 0.4);
 }
 
-.submit-btn:disabled {
+.submit-btn:disabled, .desktop-submit-btn:disabled {
   background-color: #bdc3c7;
   cursor: not-allowed;
   transform: none;
@@ -6330,6 +16128,13 @@ body {
   padding: 1.2rem;
   border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.question-number-tag {
+  font-size: 0.9rem;
+  color: #f29620;
+  font-weight: bold;
+  margin: 0 0 0.5rem 0;
 }
 
 .question-text {
@@ -6875,13 +16680,11 @@ body {
   }
 
   .main-title {
-    font-size: 2.2rem;
-    margin-bottom: 0.3rem;
+    font-size: 3rem;
+    gap: 0.1rem;
   }
 
-  .sub-title {
-    font-size: 0.95rem;
-  }
+
 
   /* 内容样式 - 可滚动 */
   .content {
@@ -6897,6 +16700,19 @@ body {
 
   .content::-webkit-scrollbar {
     display: none;
+  }
+
+  /* 变格规则和训练历史页面 - 卡片样式 */
+  .content:has(.declension-rules-desktop),
+  .content:has(.history-page) {
+    padding: 0;
+    justify-content: flex-start;
+    margin: 1rem;
+    border-radius: 8px;
+    background-color: #ffffff;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    max-width: none;
+    width: auto;
   }
 
   /* 主页样式 */
@@ -6925,7 +16741,7 @@ body {
     display: flex;
     flex-direction: column;
     height: 100%;
-    padding: 1rem 2rem;
+    padding: 1.5rem 2rem;
     max-width: none;
   }
 
@@ -7058,14 +16874,22 @@ body {
   .page-full-width .case-buttons {
     margin-top: 0.8rem;
     flex-shrink: 0;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 1rem;
-    padding:0 15rem;
+    padding: 0;
+  }
+
+  .page-full-width .case-btn {
+    flex: 0 0 auto;
+    min-width: 120px;
   }
 
   .page-full-width .case-select-container {
     justify-content: center;
+    align-items: center;
+    text-align: center;
   }
 
   .page-full-width .tutorial-content,
@@ -7086,7 +16910,7 @@ body {
   }
 
   .page-full-width .practice-content .result-container {
-    padding: 0.8rem;
+    padding: 2.8rem;
     gap: 0.5rem;
   }
 
@@ -7104,8 +16928,8 @@ body {
   }
 
   .page-full-width .practice-content .explanation {
-    font-size: 0.85rem;
-    line-height: 1.4;
+    font-size: 1rem;
+    line-height: 1.5;
     margin: 0.25rem 0;
   }
 
@@ -7127,12 +16951,25 @@ body {
   }
 
   .declension-rules-desktop .rules-sidebar {
-    padding: 0.6rem 0;
+    padding: 1rem 0;
     flex-shrink: 0;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    scrollbar-width: thin;
+  }
+
+  .declension-rules-desktop .rules-sidebar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .declension-rules-desktop .rules-sidebar::-webkit-scrollbar-track {
+    border-radius: 10px;
+  }
+
+  .declension-rules-desktop .rules-sidebar::-webkit-scrollbar-thumb {
+    border-radius: 10px;
   }
 
   .declension-rules-desktop .case-sidebar-btn {
@@ -7146,7 +16983,7 @@ body {
   }
 
   .declension-rules-desktop .rules-content {
-    padding: 0.5rem 1.5rem;
+    padding: 1.5rem 2rem;
     overflow-y: auto;
     flex: 1;
     min-width: 0;
@@ -7496,7 +17333,7 @@ body {
   }
 
   .main-title {
-    font-size: 2.2rem;
+    font-size: 3rem;
   }
 
   /* 主页样式 */
@@ -7507,7 +17344,17 @@ body {
   .training-btn {
     padding: 1rem 2.5rem;
     font-size: 1.15rem;
-    min-width: 280px;
+    height: 150px;
+  }
+
+  .training-btn .btn-icon {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 0.5rem;
+  }
+
+  .training-btn .btn-text {
+    font-size: 1rem;
   }
 
   /* 页面内容样式 - 更宽的最大宽度 */
@@ -7572,11 +17419,24 @@ body {
 
   .declension-rules-desktop .rules-sidebar {
     flex-shrink: 0;
-    padding: 0.6rem 0;
+    padding: 1rem 0;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    scrollbar-width: thin;
+  }
+
+  .declension-rules-desktop .rules-sidebar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .declension-rules-desktop .rules-sidebar::-webkit-scrollbar-track {
+    border-radius: 10px;
+  }
+
+  .declension-rules-desktop .rules-sidebar::-webkit-scrollbar-thumb {
+    border-radius: 10px;
   }
 
   .declension-rules-desktop .case-sidebar-btn {
@@ -7590,7 +17450,7 @@ body {
   }
 
   .declension-rules-desktop .rules-content {
-    padding: 0.5rem 1.5rem;
+    padding: 1.5rem 2rem;
     overflow-y: auto;
     flex: 1;
     min-width: 0;
@@ -7615,6 +17475,12 @@ body {
 
   .declension-rules-desktop .rules-content::-webkit-scrollbar-thumb:hover {
     background-color: #2980b9;
+  }
+
+  /* 电脑端变格规则页面表格小标题去掉横线 */
+  .declension-rules-desktop .declension-table-section h3 {
+    border-bottom: none;
+    padding-bottom: 0;
   }
 
   /* 总结页面 - 更大屏幕 */
@@ -7777,14 +17643,39 @@ body {
 @media (max-width: 480px) {
   /* 头部样式 */
   .header {
-    padding: 1.5rem 1rem 2.5rem;
+    padding: 1.5rem 1rem 1.5rem;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+  }
+
+  /* 移动端主内容区域添加顶部间距，避免被固定头部遮挡 */
+  .content {
+    margin-top: 80px;
   }
   
   .main-title {
-    font-size: 1.8rem;
+    font-size: 1.6rem;
+    gap: 0.05rem;
+    transform: skewX(-10deg);
   }
-  .sub-title {
-   top:65%;
+  
+  .tech-letter {
+    font-size: 1.6rem;
+    letter-spacing: -0.03em;
+  }
+  
+  .tech-letter.tech-blue {
+    transform: skewX(3deg);
+  }
+  
+  /* 移动端欢迎语样式 */
+  .welcome-message {
+    font-size: 0.8rem;
+    margin-bottom: 2.5rem;
+    padding: 0 1rem;
   }
   
   /* 内容样式 */
@@ -7907,13 +17798,143 @@ body {
 }
 
 /* 移动端/桌面端显示控制 */
-.mobile-only {
-  display: block;
-}
+  .mobile-only {
+    display: block;
+  }
 
-.desktop-only {
-  display: none;
-}
+  .desktop-only {
+    display: none;
+  }
+
+  /* 移动端菜单按钮 */
+  .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 0.5rem;
+    cursor: pointer;
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+  }
+
+  .menu-icon {
+    width: 20px;
+    height: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    cursor: pointer;
+  }
+
+  .menu-icon span {
+    display: block;
+    width: 100%;
+    height: 3px;
+    background-color: #666666;
+    border-radius: 2px;
+  }
+
+  /* 移动端侧边栏遮罩 */
+  .mobile-sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
+
+  .mobile-sidebar-overlay.overlay-visible {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* 移动端侧边栏 */
+  .mobile-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 250px;
+    height: 100vh;
+    background-color: #ffffff;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    z-index: 101;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .mobile-sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  .mobile-sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .mobile-sidebar-header h3 {
+    margin: 0;
+    color: #2c3e50;
+    font-size: 1.1rem;
+  }
+
+  .mobile-sidebar-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #7f8c8d;
+    cursor: pointer;
+    padding: 0.2rem 0.5rem;
+  }
+
+  .mobile-sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 0;
+  }
+
+  .mobile-sidebar-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 1rem 1.5rem;
+    background: none;
+    border: none;
+    color: #2c3e50;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: left;
+  }
+
+  .mobile-sidebar-btn.active {
+    background-color: #e8f4fc;
+    color: #3498db;
+  }
+
+  .mobile-sidebar-btn:hover {
+    background-color: #f5f7fa;
+  }
+
+  .mobile-sidebar-icon {
+    width: 20px;
+    height: 20px;
+    color: #3498db;
+  }
 
 /* 变格规则 - 桌面端左右布局 */
 .declension-rules-desktop {
@@ -7925,26 +17946,84 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
-  min-width: 120px;
+  min-width: 180px;
   padding-right: 1rem;
   border-right: 1px solid #e0e0e0;
 }
 
-.case-sidebar-btn {
-  padding: 0.8rem 1rem;
-  border: 1px solid #3498db;
+.category-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.category-main-btn {
+  padding: 0.5rem 0.8rem;
+  border: none;
   background-color: white;
   color: #3498db;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 500;
-  transition: all 0.3s ease;
+  transition: background-color 0.3s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  width: 90%;
+}
+
+.category-main-btn:hover {
+  background-color: #e8f4fc;
+}
+
+.category-main-btn.active:not(.noun-category) {
+  background-color: #3498db;
+  color: white;
+}
+
+.category-main-btn.noun-category.active {
+  background-color: white;
+  color: #3498db;
+}
+
+.category-main-btn .expand-icon {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+
+.category-main-btn .expand-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.category-sub-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-left: 0;
+  margin-top: 0.5rem;
+  width: 90%;
+}
+
+.case-sidebar-btn {
+  padding: 0.4rem 0.8rem;
+  border: none;
+  background-color: white;
+  color: #3498db;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background-color 0.3s ease;
+  width: 100%;
+  text-align: left;
 }
 
 .case-sidebar-btn:hover {
   background-color: #e8f4fc;
-  transform: translateY(-2px);
 }
 
 .case-sidebar-btn.active {
@@ -7985,6 +18064,22 @@ body {
   text-align: center;
 }
 
+.category-content {
+  padding: 1rem;
+}
+
+.category-content h3 {
+  color: #3498db;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #3498db;
+}
+
+.category-content p {
+  color: #7f8c8d;
+  line-height: 1.6;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -8004,4 +18099,335 @@ body {
     transform: translateY(0);
   }
 }
+
+
+.declension-table-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background-color: white;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+.declension-table-section:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.declension-table-section h3 {
+  color: #3498db;
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  padding-bottom: 0.5rem;
+}
+
+.table-description {
+  color: #7f8c8d;
+  margin-bottom: 1.2rem;
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
+
+.table-description-list {
+  color: #7f8c8d;
+  margin: 0 0 1.2rem 1.5rem;
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
+
+.table-description-list li {
+  margin-bottom: 0.5rem;
+}
+
+.table-note {
+  color: #7f8c8d;
+  margin-top: 0.8rem;
+  font-size: 0.6rem;
+  line-height: 1.4;
+  font-style: italic;
+  text-align: left;
+  padding: 0 0.5rem;
+  border-top: 1px dashed #e0e0e0;
+  padding-top: 0.8rem;
+}
+
+/* 人称代词表格样式 */
+.pronoun-declension-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.65rem;
+  overflow-x: hidden;
+  display: table;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+.pronoun-declension-table thead {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #3498db;
+}
+
+.pronoun-declension-table tbody {
+  display: table-row-group;
+}
+
+.pronoun-declension-table th,
+.pronoun-declension-table td {
+  padding: 3px 4px;
+  text-align: center;
+  border-bottom: 1px solid #e0e0e0;
+  white-space: nowrap;
+  font-family: 'Arial', sans-serif;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+}
+
+.pronoun-declension-table th:first-child,
+.pronoun-declension-table td:first-child {
+  width: 30px;
+}
+
+.pronoun-declension-table th:not(:first-child),
+.pronoun-declension-table td:not(:first-child) {
+  width: calc((100% - 30px) / 3);
+}
+
+/* 物主代词表格样式 */
+.possessive-pronoun-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.65rem;
+  overflow-x: hidden;
+  display: table;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+.possessive-pronoun-table thead {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #3498db;
+}
+
+.possessive-pronoun-table tbody {
+  display: table-row-group;
+}
+
+.possessive-pronoun-table th,
+.possessive-pronoun-table td {
+  padding: 3px 4px;
+  text-align: center;
+  border-bottom: 1px solid #e0e0e0;
+  white-space: nowrap;
+  font-family: 'Arial', sans-serif;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+}
+
+.possessive-pronoun-table th:first-child,
+.possessive-pronoun-table td:first-child {
+  width: 30px;
+}
+
+.possessive-pronoun-table th:not(:first-child),
+.possessive-pronoun-table td:not(:first-child) {
+  width: calc((100% - 30px) / 4);
+}
+
+/* 简化的物主代词表格样式 */
+.possessive-pronoun-table-simple {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.65rem;
+  overflow-x: hidden;
+  display: table;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+.possessive-pronoun-table-simple thead {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #3498db;
+}
+
+.possessive-pronoun-table-simple th,
+.possessive-pronoun-table-simple td {
+  padding: 3px 4px;
+  text-align: center;
+  border-bottom: 1px solid #e0e0e0;
+  white-space: nowrap;
+  font-family: 'Arial', sans-serif;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+  width: 25%;
+}
+
+/* 其他代词表格样式 */
+.other-pronoun-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.65rem;
+  overflow-x: hidden;
+  display: table;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+.other-pronoun-table thead {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #3498db;
+}
+
+.other-pronoun-table th,
+.other-pronoun-table td {
+  padding: 3px 4px;
+  text-align: center;
+  border-bottom: 1px solid #e0e0e0;
+  white-space: nowrap;
+  font-family: 'Arial', sans-serif;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+}
+
+.other-pronoun-table th:first-child,
+.other-pronoun-table td:first-child {
+  width: 30px;
+}
+
+.other-pronoun-table th:not(:first-child),
+.other-pronoun-table td:not(:first-child) {
+  width: calc((100% - 30px) / 4);
+}
+
+/* 简化的其他代词表格样式 */
+.other-pronoun-table-simple {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.65rem;
+  overflow-x: hidden;
+  display: table;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+.other-pronoun-table-simple thead {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #3498db;
+}
+
+.other-pronoun-table-simple th,
+.other-pronoun-table-simple td {
+  padding: 3px 4px;
+  text-align: center;
+  border-bottom: 1px solid #e0e0e0;
+  white-space: nowrap;
+  font-family: 'Arial', sans-serif;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+}
+
+.other-pronoun-table-simple th:first-child,
+.other-pronoun-table-simple td:first-child {
+  width: 30px;
+}
+
+.other-pronoun-table-simple th:not(:first-child),
+.other-pronoun-table-simple td:not(:first-child) {
+  width: calc(100% - 30px);
+}
+
+/* 变格表格样式 */
+.declension-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.6rem;
+  overflow-x: hidden;
+  display: table;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+.declension-table thead {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #3498db;
+}
+
+.declension-table tbody {
+  display: table-row-group;
+}
+
+.declension-table th,
+.declension-table td {
+  padding: 3px 4px;
+  text-align: center;
+  border-bottom: 1px solid #e0e0e0;
+  white-space: nowrap;
+  font-family: 'Arial', sans-serif;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+}
+
+.declension-table th:first-child,
+.declension-table td:first-child {
+  width: 30px;
+}
+
+.declension-table th:not(:first-child),
+.declension-table td:not(:first-child) {
+  width: calc((100% - 30px) / 4);
+}
+
+/* 确保表格容器不超出内容框 */
+.declension-table-section {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+.declension-table th {
+  font-weight: 600;
+  color: #34495e;
+}
+
+.declension-table tr:hover {
+  background-color: #f8f9fa;
+}
+
+.declension-table tr:nth-child(even) {
+  background-color: #fafafa;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .declension-table {
+    font-size: 0.6rem;
+  }
+  
+  .declension-table th,
+  .declension-table td {
+    padding: 3px 4px;
+  }
+  
+  .declension-table-section {
+    padding: 0.5rem;
+  }
+
+  /* 移动端变格规则页面标题居中 */
+  .page-full-width h2 {
+    text-align: center;
+  }
+
+  .page-full-width .instruction {
+    text-align: center;
+  }
+}
+
 </style>

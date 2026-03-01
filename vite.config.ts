@@ -4,6 +4,10 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig({
   plugins: [vue()],
   base: '/declensionRu/',
+  server: {
+    host: true,
+    allowedHosts: ['kourtney-topological-precious.ngrok-free.dev']
+  },
   build: {
     rollupOptions: {
       output: {
