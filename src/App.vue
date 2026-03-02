@@ -6204,7 +6204,7 @@ const testQuestionPool = [
   { text: 'Мы смотрели на полёт дикий гусь.', targetWord: 'дикий гусь', correctAnswer: 'диких гусей', explanation: '名词 полёт 后接第二格表示主体，复数。', number: '复数' },
   { text: 'К новогодний ужин подали торт.', targetWord: 'новогодний ужин', correctAnswer: 'новогоднему ужину', explanation: '前置词 к 表示方向时要求第三格。', number: '单数' },
   { text: 'Фильм снят по роману популярный автор.', targetWord: 'популярный автор', correctAnswer: 'популярного автора', explanation: '名词 роману 后接第二格表示作者（по роману популярного автора）。', number: '单数' },
-  { text: 'Собака бежала за хозяинский велосипед.', targetWord: 'хозяинский велосипед', correctAnswer: 'хозяинским велосипедом', explanation: '前置词 за 表示"跟随"时要求第五格。', number: '单数' },
+  { text: 'Собака бежала за хозяйский велосипед.', targetWord: 'хозяйский велосипед', correctAnswer: 'хозяйским велосипедом', explanation: '前置词 за 表示"跟随"时要求第五格。', number: '单数' },
   { text: 'Ученики писали сочинение по изученное произведение.', targetWord: 'изученное произведение', correctAnswer: 'изученным произведениям', explanation: '前置词 по 表示依据时要求第三格，复数。', number: '复数' },
   { text: 'Мы готовились к ответственный зачёт.', targetWord: 'ответственный зачёт', correctAnswer: 'ответственному зачёту', explanation: '前置词 к 表示准备时要求第三格。', number: '单数' },
   { text: 'В корзине лежало много красный помидор.', targetWord: 'красный помидор', correctAnswer: 'красных помидоров', explanation: 'много 后接名词复数第二格。', number: '复数' },
@@ -6264,7 +6264,7 @@ const testQuestionPool = [
 ]
 
 // 跟踪已使用的题目索引
-const usedQuestionIndices = ref<number[]>([])
+const usedQuestionIndices = ref<Set<number>>(new Set())
 
 // Fisher-Yates 洗牌算法
 const shuffle = (array: number[]) => {
@@ -6282,15 +6282,19 @@ const shuffle = (array: number[]) => {
 const generateTestQuestions = () => {
   const pool = [...testQuestionPool]
   
-  // 如果已经使用了所有题目，重新开始
-  if (usedQuestionIndices.value.length >= pool.length) {
-    usedQuestionIndices.value = []
+  // 生成所有索引
+  const allIndices = pool.map((_, idx) => idx)
+  
+  // 过滤出未使用的索引
+  const unusedIndices = allIndices.filter(idx => !usedQuestionIndices.value.has(idx))
+  
+  // 如果剩余可用题目不足15道，重置已使用列表
+  if (unusedIndices.length < 15) {
+    usedQuestionIndices.value.clear()
   }
   
-  // 生成未使用的题目索引
-  const availableIndices = pool
-    .map((_, idx) => idx)
-    .filter(idx => !usedQuestionIndices.value.includes(idx))
+  // 再次获取未使用的索引（可能已重置）
+  const availableIndices = allIndices.filter(idx => !usedQuestionIndices.value.has(idx))
   
   // 打乱可用索引
   const shuffledAvailable = shuffle(availableIndices)
@@ -6298,8 +6302,8 @@ const generateTestQuestions = () => {
   // 选择15道题目
   const selectedIndices = shuffledAvailable.slice(0, 15) as number[]
   
-  // 将选中的索引添加到已使用列表
-  usedQuestionIndices.value.push(...selectedIndices)
+  // 将选中的索引添加到已使用集合
+  selectedIndices.forEach(idx => usedQuestionIndices.value.add(idx))
   
   // 根据选中的索引获取题目
   const selected = selectedIndices
@@ -6332,8 +6336,10 @@ const generateTestQuestions = () => {
     
     // 生成干扰选项
     const correctWords = correctAnswer.split(' ')
+    
+    // 处理包含多个词的情况（如形容词+多个名词）
     const correctAdj = correctWords[0] || ''
-    const correctNoun = correctWords[1] || ''
+    const correctNoun = correctWords.slice(1).join(' ') || ''
     
     if (!correctAdj || !correctNoun) {
       return {
@@ -6347,25 +6353,172 @@ const generateTestQuestions = () => {
       }
     }
     
+    // 物主代词变格表（按性和数分类）
+    const possessivePronouns = {
+      'мой': {
+        masculine: ['мой', 'моего', 'моему', 'мой', 'моим', 'моем'],
+        feminine: ['моя', 'моей', 'мою'],
+        neuter: ['моё', 'моего', 'моему', 'моё', 'моим', 'моем'],
+        plural: ['мои', 'моих', 'моим', 'мои', 'моими', 'моих']
+      },
+      'твой': {
+        masculine: ['твой', 'твоего', 'твоему', 'твой', 'твоим', 'твоем'],
+        feminine: ['твоя', 'твоей', 'твою'],
+        neuter: ['твоё', 'твоего', 'твоему', 'твоё', 'твоим', 'твоем'],
+        plural: ['твои', 'твоих', 'твоим', 'твои', 'твоими', 'твоих']
+      },
+      'наш': {
+        masculine: ['наш', 'нашего', 'нашему', 'наш', 'нашим', 'нашем'],
+        feminine: ['наша', 'нашей', 'нашу'],
+        neuter: ['наше', 'нашего', 'нашему', 'наше', 'нашим', 'нашем'],
+        plural: ['наши', 'наших', 'нашим', 'наши', 'нашими', 'наших']
+      },
+      'ваш': {
+        masculine: ['ваш', 'вашего', 'вашему', 'ваш', 'вашим', 'вашем'],
+        feminine: ['ваша', 'вашей', 'вашу'],
+        neuter: ['ваше', 'вашего', 'вашему', 'ваше', 'вашим', 'вашем'],
+        plural: ['ваши', 'ваших', 'вашим', 'ваши', 'вашими', 'ваших']
+      },
+      'свой': {
+        masculine: ['свой', 'своего', 'своему', 'свой', 'своим', 'своём'],
+        feminine: ['своя', 'своей', 'свою'],
+        neuter: ['своё', 'своего', 'своему', 'своё', 'своим', 'своём'],
+        plural: ['свои', 'своих', 'своим', 'свои', 'своими', 'своих']
+      }
+    }
+    
+    // 物主代词所有形式的映射，用于检测
+    const allPossessiveForms = new Map<string, { base: string; gender: string }>()
+    Object.entries(possessivePronouns).forEach(([base, forms]) => {
+      Object.entries(forms).forEach(([gender, variants]) => {
+        variants.forEach(variant => {
+          allPossessiveForms.set(variant, { base, gender })
+        })
+      })
+    })
+    
+    // 检查是否是物主代词
+    const firstWord = words[0]
+    const possessiveInfo = typeof firstWord === 'string' ? allPossessiveForms.get(firstWord) : null
+    const isPossessivePronoun = !!possessiveInfo
+    
+    // 确定形容词/物主代词的性和数
+    let gender = 'masculine' // 默认阳性
+    
+    // 优先使用题目中指定的数
+    if (sentence.number === '复数') {
+      gender = 'plural'
+    } else if (isPossessivePronoun && possessiveInfo) {
+      gender = possessiveInfo.gender
+    } else {
+      // 分析形容词的性和数
+      if (correctAdj.endsWith('ая') || correctAdj.endsWith('ой') || correctAdj.endsWith('ую')) {
+        gender = 'feminine'
+      } else if (correctAdj.endsWith('ое') || correctAdj.endsWith('ем') || correctAdj.endsWith('ому')) {
+        gender = 'neuter'
+      } else if (correctAdj.endsWith('ые') || correctAdj.endsWith('ых') || correctAdj.endsWith('ыми')) {
+        gender = 'plural'
+      }
+    }
+    
     // 提取词干
     const adjStem = correctAdj.replace(/(ый|ой|ий|ая|ое|ые|ого|его|ому|ему|ым|им|ую|ою|ых|их|ыми|ими)$/, '')
     const nounStem = correctNoun.replace(/(а|я|о|е|ы|и|у|ю|ой|ей|ов|ев|ам|ям|ами|ями|ах|ях)$/, '')
     
-    // 生成不同的形容词变格
-    const adjVariants = [
-      correctAdj,
-      adjStem + 'ый',
-      adjStem + 'ого',
-      adjStem + 'ому',
-      adjStem + 'ым',
-      adjStem + 'ая',
-      adjStem + 'ой',
-      adjStem + 'ую',
-      adjStem + 'ое',
-      adjStem + 'ые',
-      adjStem + 'ых',
-      adjStem + 'ыми'
-    ].filter(adj => adj !== correctAdj)
+    // 判断是否为软变化形容词（以-ий结尾，但排除以-ский结尾的硬变化形容词）
+    const isSoftAdjective = (correctAdj.endsWith('ий') && !correctAdj.endsWith('ский')) || 
+                            (correctAdj.endsWith('его') && !correctAdj.endsWith('ского')) || 
+                            (correctAdj.endsWith('ему') && !correctAdj.endsWith('скому')) || 
+                            (correctAdj.endsWith('им') && !correctAdj.endsWith('ским')) || 
+                            (correctAdj.endsWith('ем') && !correctAdj.endsWith('ском')) || 
+                            correctAdj.endsWith('ие') || 
+                            correctAdj.endsWith('их') || 
+                            correctAdj.endsWith('ими')
+    
+    // 生成不同的形容词/物主代词变格（保持性和数一致）
+    let adjVariants: string[] = []
+    if (isPossessivePronoun && possessiveInfo) {
+      // 使用物主代词的正确变格（保持性和数一致）
+      const baseForm = possessiveInfo.base as keyof typeof possessivePronouns
+      adjVariants = (possessivePronouns[baseForm][gender as keyof typeof possessivePronouns[typeof baseForm]] || [])
+        .filter(pronoun => pronoun !== correctAdj)
+    } else {
+      // 普通形容词变格（保持性和数一致）
+      if (isSoftAdjective) {
+        // 软变化形容词（如：красивый → красивого, синий → синего）
+        const softStem = adjStem
+        if (gender === 'feminine') {
+          adjVariants = [
+            correctAdj,
+            softStem + 'яя',
+            softStem + 'ей',
+            softStem + 'юю'
+          ].filter(adj => adj !== correctAdj)
+        } else if (gender === 'neuter') {
+          adjVariants = [
+            correctAdj,
+            softStem + 'ее',
+            softStem + 'его',
+            softStem + 'ему',
+            softStem + 'им',
+            softStem + 'ем'
+          ].filter(adj => adj !== correctAdj)
+        } else if (gender === 'plural') {
+          adjVariants = [
+            correctAdj,
+            softStem + 'ие',
+            softStem + 'их',
+            softStem + 'ими'
+          ].filter(adj => adj !== correctAdj)
+        } else { // masculine
+          adjVariants = [
+            correctAdj,
+            softStem + 'ий',
+            softStem + 'его',
+            softStem + 'ему',
+            softStem + 'им',
+            softStem + 'ем'
+          ].filter(adj => adj !== correctAdj)
+        }
+      } else {
+        // 硬变化形容词
+        if (gender === 'feminine') {
+          adjVariants = [
+            correctAdj,
+            adjStem + 'ая',
+            adjStem + 'ой',
+            adjStem + 'ую'
+          ].filter(adj => adj !== correctAdj)
+        } else if (gender === 'neuter') {
+          adjVariants = [
+            correctAdj,
+            adjStem + 'ое',
+            adjStem + 'ого',
+            adjStem + 'ому',
+            adjStem + 'ым',
+            adjStem + 'ом'
+          ].filter(adj => adj !== correctAdj)
+        } else if (gender === 'plural') {
+          adjVariants = [
+            correctAdj,
+            adjStem + 'ые',
+            adjStem + 'ых',
+            adjStem + 'ыми'
+          ].filter(adj => adj !== correctAdj)
+        } else { // masculine
+          // 判断原始形容词是否以-ский结尾，如果是则使用-ий而非-ый
+          const isSkiyAdjective = correctAdj.includes('ск') && (correctAdj.endsWith('ий') || correctAdj.endsWith('ого') || correctAdj.endsWith('ому') || correctAdj.endsWith('им') || correctAdj.endsWith('ом'))
+          adjVariants = [
+            correctAdj,
+            isSkiyAdjective ? adjStem + 'ий' : adjStem + 'ый',
+            adjStem + 'ого',
+            adjStem + 'ому',
+            adjStem + 'ым',
+            adjStem + 'ом'
+          ].filter(adj => adj !== correctAdj)
+        }
+      }
+    }
     
     // 生成不同的名词变格
     const nounVariants = [
@@ -6390,10 +6543,10 @@ const generateTestQuestions = () => {
     
     // 组合生成干扰选项
     for (let i = 0; i < 3 && i < adjVariants.length; i++) {
-      options.push((adjVariants[i] as string) + ' ' + correctNoun)
+      options.push(adjVariants[i] + ' ' + correctNoun)
     }
     for (let i = 0; i < 3 && i < nounVariants.length; i++) {
-      options.push(correctAdj + ' ' + (nounVariants[i] as string))
+      options.push(correctAdj + ' ' + nounVariants[i])
     }
     
     // 去重
