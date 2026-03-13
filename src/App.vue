@@ -6,6 +6,17 @@ import { HomeFilled, Document, ArrowLeft, Clock } from '@element-plus/icons-vue'
 const currentPage = ref('home')
 const previousPage = ref('home') // 保存之前的页面状态，用于恢复会话
 
+
+
+// 更新公告弹窗显示状态 - 从localStorage读取
+const showUpdateModal = ref(localStorage.getItem('hideUpdateModal') !== 'true')
+
+// 关闭更新公告弹窗
+const closeUpdateModal = () => {
+  showUpdateModal.value = false
+  localStorage.setItem('hideUpdateModal', 'true')
+}
+
 // 页面导航历史记录栈
 const navigationHistory = ref<string[]>(['home']) // 初始只有主页
 const historyIndex = ref(0) // 当前在历史记录中的索引
@@ -40,6 +51,8 @@ const adjNounDropdownLeft = ref(0)
 const adjNounShowResult = ref(false)
 const adjNounAnswerResult = ref<string | null>(null)
 const usedAdjNounSentences = ref<number[]>([])
+const adjNounCaseFilter = ref<number | null>(null) // 格筛选，null表示不限制
+const adjNounShowFilterDropdown = ref(false)
 
 // 物主代词+名词组合训练状态
 const possNounCombinedState = ref('practice') // practice
@@ -52,6 +65,22 @@ const possNounDropdownLeft = ref(0)
 const possNounShowResult = ref(false)
 const possNounAnswerResult = ref<string | null>(null)
 const usedPossNounSentences = ref<number[]>([])
+const possNounCaseFilter = ref<number | null>(null) // 格筛选，null表示不限制
+const possNounShowFilterDropdown = ref(false)
+
+// 数词+名词组合训练状态
+const numNounCombinedState = ref('practice') // practice
+const currentNumNounSentence = ref<any>(null)
+const numNounSelectedNumeral = ref('')
+const numNounSelectedNoun = ref('')
+const numNounShowDropdown = ref<'numeral' | 'noun' | null>(null)
+const numNounDropdownTop = ref(0)
+const numNounDropdownLeft = ref(0)
+const numNounShowResult = ref(false)
+const numNounAnswerResult = ref<string | null>(null)
+const usedNumNounSentences = ref<number[]>([])
+const numNounCaseFilter = ref<number | null>(null) // 格筛选，null表示不限制
+const numNounShowFilterDropdown = ref(false)
 
 // 形容词训练题目数据
 const adjectiveTrainingSentences = ref<Array<{
@@ -3399,6 +3428,438 @@ const possNounCombinedSentences = ref<Array<{
   }
 ])
 
+// 数词+名词组合训练题目数据
+const numNounCombinedSentences = ref<Array<{
+  id: number
+  text: string
+  targetWord: string
+  correctAnswer: string
+  explanation: string
+  case: number
+  number: string
+  nounOptions?: string[]
+  numeralOptions?: string[]
+}>>([
+  {
+    id: 1,
+    text: 'У меня есть 1 брат.',
+    targetWord: '1 брат',
+    correctAnswer: 'один брат',
+    explanation: '主格，数词один为阳性单数。',
+    case: 1,
+    number: '单数'
+  },
+  {
+    id: 2,
+    text: 'У неё есть 1 сестра.',
+    targetWord: '1 сестра',
+    correctAnswer: 'одна сестра',
+    explanation: '主格，数词один为阴性单数。',
+    case: 1,
+    number: '单数'
+  },
+  {
+    id: 3,
+    text: 'На столе 1 яблоко.',
+    targetWord: '1 яблоко',
+    correctAnswer: 'одно яблоко',
+    explanation: '前置格，数词один为中性单数。',
+    case: 4,
+    number: '单数'
+  },
+  {
+    id: 4,
+    text: 'У него нет 1 друг.',
+    targetWord: '1 друг',
+    correctAnswer: 'одного друга',
+    explanation: '否定结构нет要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 5,
+    text: 'У неё нет 1 книга.',
+    targetWord: '1 книга',
+    correctAnswer: 'одной книги',
+    explanation: '否定结构нет要求第二格。',
+    case: 2,
+    number: '单数'
+  },
+  {
+    id: 6,
+    text: 'Она позвонила 1 подруга.',
+    targetWord: '1 подруга',
+    correctAnswer: 'одной подруге',
+    explanation: '动词позвонить要求第三格。',
+    case: 3,
+    number: '单数'
+  },
+  {
+    id: 7,
+    text: 'Я вижу 1 друг.',
+    targetWord: '1 друг',
+    correctAnswer: 'одного друга',
+    explanation: '动词видеть要求第四格，动物名词第四格同第二格。',
+    case: 4,
+    number: '单数'
+  },
+  {
+    id: 8,
+    text: 'Я горжусь 1 брат.',
+    targetWord: '1 брат',
+    correctAnswer: 'одним братом',
+    explanation: '动词гордиться要求第五格。',
+    case: 5,
+    number: '单数'
+  },
+  {
+    id: 9,
+    text: 'Мы говорили об 1 проблема.',
+    targetWord: '1 проблема',
+    correctAnswer: 'об одной проблеме',
+    explanation: '前置词о要求第六格。',
+    case: 6,
+    number: '单数'
+  },
+  {
+    id: 10,
+    text: 'У меня есть 2 брат.',
+    targetWord: '2 брат',
+    correctAnswer: 'два брата',
+    explanation: '主格，数词два为阳性复数。',
+    case: 1,
+    number: '复数'
+  },
+  {
+    id: 11,
+    text: 'У неё есть 2 сестра.',
+    targetWord: '2 сестра',
+    correctAnswer: 'две сестры',
+    explanation: '主格，数词два为阴性复数。',
+    case: 1,
+    number: '复数'
+  },
+  {
+    id: 12,
+    text: 'На столе 2 яблоко.',
+    targetWord: '2 яблоко',
+    correctAnswer: 'два яблока',
+    explanation: '前置格，数词два为中性复数。',
+    case: 4,
+    number: '复数'
+  },
+  {
+    id: 13,
+    text: 'У него нет 2 друг.',
+    targetWord: '2 друг',
+    correctAnswer: 'двух друзей',
+    explanation: '否定结构нет要求第二格。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 14,
+    text: 'Она позвонила 2 подруга.',
+    targetWord: '2 подруга',
+    correctAnswer: 'двум подругам',
+    explanation: '动词позвонить要求第三格。',
+    case: 3,
+    number: '复数'
+  },
+  {
+    id: 15,
+    text: 'Я купил 2 стол.',
+    targetWord: '2 стол',
+    correctAnswer: 'два стола',
+    explanation: '动词купить要求第四格，非动物名词第四格同第一格。',
+    case: 4,
+    number: '复数'
+  },
+  {
+    id: 16,
+    text: 'Мы гордимся 2 победа.',
+    targetWord: '2 победа',
+    correctAnswer: 'двумя победами',
+    explanation: '动词гордиться要求第五格。',
+    case: 5,
+    number: '复数'
+  },
+  {
+    id: 17,
+    text: 'Они говорят о 2 фильм.',
+    targetWord: '2 фильм',
+    correctAnswer: 'о двух фильмах',
+    explanation: '前置词о要求第六格。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 18,
+    text: 'В классе 3 студент.',
+    targetWord: '3 студент',
+    correctAnswer: 'три студента',
+    explanation: '主格，数词три为阳性复数。',
+    case: 1,
+    number: '复数'
+  },
+  {
+    id: 19,
+    text: 'У меня нет 3 рубль.',
+    targetWord: '3 рубль',
+    correctAnswer: 'трёх рублей',
+    explanation: '否定结构нет要求第二格。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 20,
+    text: 'Я дал книгу 3 ученик.',
+    targetWord: '3 ученик',
+    correctAnswer: 'трём ученикам',
+    explanation: '动词дать要求第三格。',
+    case: 3,
+    number: '复数'
+  },
+  {
+    id: 21,
+    text: 'Я купил 3 билет.',
+    targetWord: '3 билет',
+    correctAnswer: 'три билета',
+    explanation: '动词купить要求第四格，非动物名词第四格同第一格。',
+    case: 4,
+    number: '复数'
+  },
+  {
+    id: 22,
+    text: 'Я встретил 3 друг.',
+    targetWord: '3 друг',
+    correctAnswer: 'трёх друзей',
+    explanation: '动词встретить要求第四格，动物名词第四格同第二格。',
+    case: 4,
+    number: '复数'
+  },
+  {
+    id: 23,
+    text: 'Мы довольны 3 ответ.',
+    targetWord: '3 ответ',
+    correctAnswer: 'тремя ответами',
+    explanation: '形容词доволен要求第五格。',
+    case: 5,
+    number: '复数'
+  },
+  {
+    id: 24,
+    text: 'Они живут в 3 комната.',
+    targetWord: '3 комната',
+    correctAnswer: 'в трёх комнатах',
+    explanation: '前置词в要求第六格。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 25,
+    text: 'На столе 4 книга.',
+    targetWord: '4 книга',
+    correctAnswer: 'четыре книги',
+    explanation: '前置格，数词четыре为阴性复数。',
+    case: 4,
+    number: '复数'
+  },
+  {
+    id: 26,
+    text: 'У неё нет 4 карандаш.',
+    targetWord: '4 карандаш',
+    correctAnswer: 'четырёх карандашей',
+    explanation: '否定结构нет要求第二格。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 27,
+    text: 'Он подарил цветы 4 женщина.',
+    targetWord: '4 женщина',
+    correctAnswer: 'четырём женщинам',
+    explanation: '动词подарить要求第三格。',
+    case: 3,
+    number: '复数'
+  },
+  {
+    id: 28,
+    text: 'Я вижу 4 стол.',
+    targetWord: '4 стол',
+    correctAnswer: 'четыре стола',
+    explanation: '动词видеть要求第四格，非动物名词第四格同第一格。',
+    case: 4,
+    number: '复数'
+  },
+  {
+    id: 29,
+    text: 'Я встретил 4 студент.',
+    targetWord: '4 студент',
+    correctAnswer: 'четырёх студента',
+    explanation: '动词встретить要求第四格，数词2/3/4后接单数2格。',
+    case: 4,
+    number: '复数',
+    nounOptions: ['студента', 'студентов', 'студент']
+  },
+  {
+    id: 30,
+    text: 'Они думают о 4 страна.',
+    targetWord: '4 страна',
+    correctAnswer: 'о четырёх странах',
+    explanation: '前置词о要求第六格。',
+    case: 6,
+    number: '复数'
+  },
+  {
+    id: 31,
+    text: 'У меня есть 5 яблоко.',
+    targetWord: '5 яблоко',
+    correctAnswer: 'пять яблок',
+    explanation: '主格，数词пять为中性复数。',
+    case: 1,
+    number: '复数'
+  },
+  {
+    id: 32,
+    text: 'У него нет 5 рубль.',
+    targetWord: '5 рубль',
+    correctAnswer: 'пяти рублей',
+    explanation: '否定结构нет要求第二格。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 33,
+    text: 'Я дал книгу 5 ученик.',
+    targetWord: '5 ученик',
+    correctAnswer: 'пяти ученикам',
+    explanation: '动词дать要求第三格。',
+    case: 3,
+    number: '复数'
+  },
+  {
+    id: 34,
+    text: 'Мы гордимся 5 победа.',
+    targetWord: '5 победа',
+    correctAnswer: 'пятью победами',
+    explanation: '动词гордиться要求第五格。',
+    case: 5,
+    number: '复数'
+  },
+  {
+    id: 35,
+    text: 'В классе 8 студент.',
+    targetWord: '8 студент',
+    correctAnswer: 'восемь студентов',
+    explanation: '主格，数词восемь为阳性复数。',
+    case: 1,
+    number: '复数'
+  },
+  {
+    id: 36,
+    text: 'У неё нет 8 книга.',
+    targetWord: '8 книга',
+    correctAnswer: 'восьми книг',
+    explanation: '否定结构нет要求第二格。',
+    case: 2,
+    number: '复数'
+  },
+  {
+    id: 37,
+    text: 'Она позвонила 8 друг.',
+    targetWord: '8 друг',
+    correctAnswer: 'восьми друзьям',
+    explanation: '动词позвонить要求第三格。',
+    case: 3,
+    number: '复数'
+  },
+  {
+    id: 38,
+    text: 'На столе 10 тетрадь.',
+    targetWord: '10 тетрадь',
+    correctAnswer: 'десять тетрадей',
+    explanation: '前置格，数词десять为阴性复数。',
+    case: 4,
+    number: '复数',
+    numeralOptions: ['десять', 'десяти', 'десятью']
+  },
+  {
+    id: 39,
+    text: 'У меня нет 10 рубль.',
+    targetWord: '10 рубль',
+    correctAnswer: 'десяти рублей',
+    explanation: '否定结构нет要求第二格。',
+    case: 2,
+    number: '复数',
+    numeralOptions: ['десяти', 'десять', 'десятью']
+  },
+  {
+    id: 40,
+    text: 'Они говорят о 10 страна.',
+    targetWord: '10 страна',
+    correctAnswer: 'о десяти странах',
+    explanation: '前置词о要求第六格。',
+    case: 6,
+    number: '复数',
+    numeralOptions: ['десяти', 'десять', 'десятью']
+  },
+  {
+    id: 41,
+    text: 'В библиотеке 25 книга.',
+    targetWord: '25 книга',
+    correctAnswer: 'двадцать пять книг',
+    explanation: '前置格，复合数词前后都要变格。',
+    case: 4,
+    number: '复数',
+    numeralOptions: ['двадцать пять', 'двадцати пяти', 'двадцатью пятью']
+  },
+  {
+    id: 42,
+    text: 'У меня нет 25 рубль.',
+    targetWord: '25 рубль',
+    correctAnswer: 'двадцати пяти рублей',
+    explanation: '否定结构нет要求第二格，复合数词前后都要变格。',
+    case: 2,
+    number: '复数',
+    nounOptions: ['рублей', 'рубля', 'рубль'],
+    numeralOptions: ['двадцати пяти', 'двадцать пять', 'двадцатью пятью']
+  },
+  {
+    id: 43,
+    text: 'Я подарил цветы 48 женщина.',
+    targetWord: '48 женщина',
+    correctAnswer: 'сорока восьми женщинам',
+    explanation: '动词подарить要求第三格，复合数词前后都要变格。',
+    case: 3,
+    number: '复数',
+    nounOptions: ['женщинам', 'женщин', 'женщина'],
+    numeralOptions: ['сорока восьми', 'сорок восемь', 'сорок восемью']
+  },
+  {
+    id: 44,
+    text: 'Мы гордимся 25 ученик.',
+    targetWord: '25 ученик',
+    correctAnswer: 'двадцатью пятью учениками',
+    explanation: '动词гордиться要求第五格，复合数词前后都要变格。',
+    case: 5,
+    number: '复数',
+    nounOptions: ['учениками', 'учеников', 'ученик'],
+    numeralOptions: ['двадцатью пятью', 'двадцать пять', 'двадцати пяти']
+  },
+  {
+    id: 45,
+    text: 'Они говорили о 48 страна.',
+    targetWord: '48 страна',
+    correctAnswer: 'о сорока восьми странах',
+    explanation: '前置词о要求第六格，复合数词前后都要变格。',
+    case: 6,
+    number: '复数',
+    nounOptions: ['странах', 'стран', 'страна'],
+    numeralOptions: ['сорока восьми', 'сорок восемь', 'сорок восемью']
+  }
+])
+
 // 物主代词训练题目数据
 const possessiveTrainingSentences = ref<Array<{
   id: number
@@ -6088,6 +6549,10 @@ const navigateTo = (page: string, addToHistory: boolean = true) => {
     // 物主代词+名词组合训练
     possNounCombinedState.value = 'practice'
     loadPossNounCombinedSentence()
+  } else if (page === 'num-noun-combined') {
+    // 数词+名词组合训练
+    numNounCombinedState.value = 'practice'
+    loadNumNounCombinedSentence()
   }
 }
 
@@ -6753,13 +7218,24 @@ const expandedCases = reactive({
 } as Record<number, boolean>)
 
 // 变格规则页面分类类型
-type RulesCategory = 'noun' | 'adjective' | 'personal-pronoun' | 'possessive-pronoun' | 'other'
+type RulesCategory = 'noun' | 'adjective' | 'personal-pronoun' | 'possessive-pronoun' | 'numeral' | 'other'
 
 // 变格规则页面当前选中的分类
 const selectedRulesCategory = ref<RulesCategory>('noun')
 
 // 变格规则页面滚动位置
 const rulesScrollPosition = ref(0)
+
+// 变格规则页面分类导航栏ref
+const categoryScroll = ref<HTMLElement | null>(null)
+const categoryBtnRefs = ref<Record<string, HTMLElement>>({})
+
+// 设置分类按钮ref
+const setCategoryBtnRef = (id: string, el: any) => {
+  if (el) {
+    categoryBtnRefs.value[id] = el
+  }
+}
 
 // 切换变格规则页面分类
 const selectRulesCategory = (category: RulesCategory) => {
@@ -6769,6 +7245,29 @@ const selectRulesCategory = (category: RulesCategory) => {
     expandedCases[Number(key)] = false
   })
   selectedDesktopCase.value = null
+  
+  // 自动滚动导航栏，使当前分类按钮可见
+  nextTick(() => {
+    const btn = categoryBtnRefs.value[category]
+    const scrollContainer = categoryScroll.value
+    if (btn && scrollContainer) {
+      const btnLeft = btn.offsetLeft
+      const btnWidth = btn.offsetWidth
+      const scrollWidth = scrollContainer.scrollWidth
+      const containerWidth = scrollContainer.offsetWidth
+      
+      // 计算使按钮居中的滚动位置
+      let scrollPos = btnLeft - (containerWidth / 2) + (btnWidth / 2)
+      
+      // 边界检查
+      scrollPos = Math.max(0, Math.min(scrollPos, scrollWidth - containerWidth))
+      
+      scrollContainer.scrollTo({
+        left: scrollPos,
+        behavior: 'smooth'
+      })
+    }
+  })
 }
 
 // 电脑端当前选中的格
@@ -7375,6 +7874,133 @@ const generateNounOptions = (correctNoun: string, targetNoun: string, _caseNum: 
   return options.slice(0, 4).sort(() => Math.random() - 0.5)
 }
 
+// 生成数词+名词训练的名词选项（专门处理，确保不包含数词）
+const generateNumNounOptions = (correctNoun: string, targetNoun: string, _caseNum: number, _number: string): string[] => {
+  const options = [correctNoun]
+  
+  // 从targetNoun中提取纯名词部分（去掉数字）
+  // targetNoun可能是"25 ученик"这样的格式
+  const targetParts = targetNoun.split(' ')
+  const pureTargetNoun = targetParts.length > 1 ? targetParts.slice(1).join(' ') : targetNoun
+  
+  // 常见的数词，用于过滤
+  const numerals = ['один', 'одна', 'одно', 'одного', 'одной', 'одним', 'одними',
+                   'два', 'две', 'двух', 'двум', 'двумя',
+                   'три', 'трёх', 'трём', 'тремя',
+                   'четыре', 'четырёх', 'четырём', 'четырьмя',
+                   'пять', 'пяти', 'пятью',
+                   'восемь', 'восьми', 'восемью',
+                   'десять', 'десяти', 'десятью',
+                   'двадцать', 'двадцати', 'двадцатью',
+                   'тридцать', 'тридцати', 'тридцатью',
+                   'сорок', 'сорока',
+                   'пятьдесят', 'пятидесяти', 'пятьюдесятью',
+                   'шестьдесят', 'шестидесяти', 'шестьюдесятью',
+                   'семьдесят', 'семидесяти', 'семьюдесятью',
+                   'восемьдесят', 'восьмидесяти', 'восемьюдесятью',
+                   'девяносто', 'девяноста',
+                   'сто', 'ста', 'сот',
+                   'шесть', 'шести', 'шестью',
+                   'семь', 'семи', 'семью',
+                   'девять', 'девяти', 'девятью']
+  
+  // 根据格和数生成一些常见的变体
+  const commonEndings = ['а', 'ы', 'е', 'у', 'ой', 'е', 'ов', 'ев', 'ей', 'ам', 'ами', 'ах', 'ям', 'ями', 'ях', 'ой', 'ом', 'ем']
+  
+  // 尝试从纯名词提取词干
+  const base = pureTargetNoun.replace(/(а|я|о|е|и|ы|ов|ев|ей|ь|й)$/g, '')
+  
+  commonEndings.forEach(ending => {
+    const variant = base + ending
+    if (!options.includes(variant) && variant !== pureTargetNoun && variant.length > 1 && !numerals.includes(variant)) {
+      options.push(variant)
+    }
+  })
+  
+  // 添加一些常见的变格形式（基于纯名词）
+  if (pureTargetNoun.endsWith('а')) {
+    const variants = [pureTargetNoun.replace(/а$/, 'ы'), pureTargetNoun.replace(/а$/, 'е'), pureTargetNoun.replace(/а$/, 'у'), pureTargetNoun.replace(/а$/, 'ой'), pureTargetNoun.replace(/а$/, 'е'), pureTargetNoun.replace(/а$/, 'ам'), pureTargetNoun.replace(/а$/, 'ами'), pureTargetNoun.replace(/а$/, 'ах')]
+    variants.forEach(variant => {
+      if (!options.includes(variant) && !numerals.includes(variant)) {
+        options.push(variant)
+      }
+    })
+  } else if (pureTargetNoun.endsWith('я')) {
+    const variants = [pureTargetNoun.replace(/я$/, 'и'), pureTargetNoun.replace(/я$/, 'е'), pureTargetNoun.replace(/я$/, 'ю'), pureTargetNoun.replace(/я$/, 'ёй'), pureTargetNoun.replace(/я$/, 'е'), pureTargetNoun.replace(/я$/, 'ям'), pureTargetNoun.replace(/я$/, 'ями'), pureTargetNoun.replace(/я$/, 'ях')]
+    variants.forEach(variant => {
+      if (!options.includes(variant) && !numerals.includes(variant)) {
+        options.push(variant)
+      }
+    })
+  } else if (pureTargetNoun.endsWith('о')) {
+    const variants = [pureTargetNoun.replace(/о$/, 'а'), pureTargetNoun.replace(/о$/, 'у'), pureTargetNoun.replace(/о$/, 'ом'), pureTargetNoun.replace(/о$/, 'е'), pureTargetNoun.replace(/о$/, 'ам'), pureTargetNoun.replace(/о$/, 'ами'), pureTargetNoun.replace(/о$/, 'ах')]
+    variants.forEach(variant => {
+      if (!options.includes(variant) && !numerals.includes(variant)) {
+        options.push(variant)
+      }
+    })
+  } else if (pureTargetNoun.endsWith('е')) {
+    const variants = [pureTargetNoun.replace(/е$/, 'я'), pureTargetNoun.replace(/е$/, 'ю'), pureTargetNoun.replace(/е$/, 'ем'), pureTargetNoun.replace(/е$/, 'ях')]
+    variants.forEach(variant => {
+      if (!options.includes(variant) && !numerals.includes(variant)) {
+        options.push(variant)
+      }
+    })
+  } else if (pureTargetNoun.endsWith('ь')) {
+    const variants = [pureTargetNoun.replace(/ь$/, 'и'), pureTargetNoun.replace(/ь$/, 'ью'), pureTargetNoun.replace(/ь$/, 'е'), pureTargetNoun.replace(/ь$/, 'ями'), pureTargetNoun.replace(/ь$/, 'ях')]
+    variants.forEach(variant => {
+      if (!options.includes(variant) && !numerals.includes(variant)) {
+        options.push(variant)
+      }
+    })
+  } else if (pureTargetNoun.endsWith('ы')) {
+    const variants = [pureTargetNoun.replace(/ы$/, 'а'), pureTargetNoun.replace(/ы$/, 'ам'), pureTargetNoun.replace(/ы$/, 'ами'), pureTargetNoun.replace(/ы$/, 'ах')]
+    variants.forEach(variant => {
+      if (!options.includes(variant) && !numerals.includes(variant)) {
+        options.push(variant)
+      }
+    })
+  }
+  
+  // 去重并限制选项数量
+  // 注意：对于1格题目，correctNoun可能等于pureTargetNoun，所以不能只保留correctNoun
+  const uniqueOptions = [...new Set(options)].filter(opt => {
+    if (!opt) return false
+    // 检查选项是否包含任何数词
+    const containsNumeral = numerals.some(numeral => opt.includes(numeral))
+    return !containsNumeral
+  })
+  
+  // 确保至少有2个选项（包括正确答案）
+  if (uniqueOptions.length < 2) {
+    // 如果选项不足，添加一些基于词干的变体
+    const additionalEndings = ['и', 'а', 'у', 'ом', 'е', 'ы', 'ов', 'ам', 'ами', 'ах']
+    for (const ending of additionalEndings) {
+      if (uniqueOptions.length >= 2) break
+      const variant = base + ending
+      if (variant && !uniqueOptions.includes(variant) && !numerals.includes(variant)) {
+        uniqueOptions.push(variant)
+      }
+    }
+  }
+  
+  // 如果仍然不足，添加correctNoun（确保正确答案一定在选项中）
+  while (uniqueOptions.length < 2) {
+    if (!uniqueOptions.includes(correctNoun)) {
+      uniqueOptions.push(correctNoun)
+    } else {
+      // 如果correctNoun已经在列表中，添加pureTargetNoun作为干扰项
+      if (!uniqueOptions.includes(pureTargetNoun)) {
+        uniqueOptions.push(pureTargetNoun)
+      }
+      break
+    }
+  }
+  
+  // 随机打乱选项顺序
+  return shuffleArray(uniqueOptions.slice(0, 4))
+}
+
 // 加载形容词+名词组合训练题目
 const loadAdjNounCombinedSentence = () => {
   // 重置当前题目的状态
@@ -7384,15 +8010,18 @@ const loadAdjNounCombinedSentence = () => {
   adjNounShowResult.value = false
   adjNounAnswerResult.value = null
   
-  // 获取未使用过的题目
+  // 获取未使用过的题目，根据筛选条件过滤
   let availableSentences = adjNounCombinedSentences.value.filter(sentence => 
-    !usedAdjNounSentences.value.includes(sentence.id)
+    !usedAdjNounSentences.value.includes(sentence.id) && 
+    (adjNounCaseFilter.value === null || sentence.case === adjNounCaseFilter.value)
   )
   
   // 如果所有题目都已使用，重置已使用列表
   if (availableSentences.length === 0) {
     usedAdjNounSentences.value = []
-    availableSentences = adjNounCombinedSentences.value
+    availableSentences = adjNounCombinedSentences.value.filter(sentence => 
+      adjNounCaseFilter.value === null || sentence.case === adjNounCaseFilter.value
+    )
   }
   
   // 随机选择一道题目
@@ -7531,15 +8160,18 @@ const loadPossNounCombinedSentence = () => {
   possNounShowResult.value = false
   possNounAnswerResult.value = null
   
-  // 获取未使用过的题目
+  // 获取未使用过的题目，根据筛选条件过滤
   let availableSentences = possNounCombinedSentences.value.filter(sentence => 
-    !usedPossNounSentences.value.includes(sentence.id)
+    !usedPossNounSentences.value.includes(sentence.id) && 
+    (possNounCaseFilter.value === null || sentence.case === possNounCaseFilter.value)
   )
   
   // 如果所有题目都已使用，重置已使用列表
   if (availableSentences.length === 0) {
     usedPossNounSentences.value = []
-    availableSentences = possNounCombinedSentences.value
+    availableSentences = possNounCombinedSentences.value.filter(sentence => 
+      possNounCaseFilter.value === null || sentence.case === possNounCaseFilter.value
+    )
   }
   
   // 随机选择一道题目
@@ -7671,6 +8303,227 @@ const checkPossNounAnswer = () => {
 const possNounNextQuestion = () => {
   loadPossNounCombinedSentence()
 }
+
+// 加载数词+名词组合训练题目
+const loadNumNounCombinedSentence = () => {
+  numNounSelectedNumeral.value = ''
+  numNounSelectedNoun.value = ''
+  numNounShowDropdown.value = null
+  numNounShowResult.value = false
+  numNounAnswerResult.value = null
+  
+  let availableSentences = numNounCombinedSentences.value.filter(sentence => 
+    !usedNumNounSentences.value.includes(sentence.id) && 
+    (numNounCaseFilter.value === null || sentence.case === numNounCaseFilter.value)
+  )
+  
+  if (availableSentences.length === 0) {
+    usedNumNounSentences.value = []
+    availableSentences = numNounCombinedSentences.value.filter(sentence => 
+      numNounCaseFilter.value === null || sentence.case === numNounCaseFilter.value
+    )
+  }
+  
+  const randomIndex = Math.floor(Math.random() * availableSentences.length)
+  const sentence = availableSentences[randomIndex]
+  
+  if (!sentence) return
+  
+  // 解析正确答案，处理6格情况（可能包含介词如"о двух"）
+  const correctParts = sentence.correctAnswer.split(' ')
+  let correctNumeral: string
+  let correctNoun: string
+  
+  // 检查是否以介词开头（о, в, об等）
+  const prepositions = ['о', 'в', 'об', 'на', 'при', 'по', 'с', 'со', 'к', 'ко', 'у', 'из', 'от', 'до', 'для', 'про', 'через', 'под', 'над', 'перед', 'за', 'между']
+  
+  // 复合数词的第一部分（如"двадцать"、"сорок"等）
+  const compoundFirstParts = ['двадцать', 'тридцать', 'сорок', 'пятьдесят', 'шестьдесят', 'семьдесят', 'восемьдесят', 'девяносто', 'сто']
+  const compoundFirstPartsGenitive = ['двадцати', 'тридцати', 'сорока', 'пятидесяти', 'шестидесяти', 'семидесяти', 'восьмидесяти', 'девяноста', 'ста']
+  const compoundFirstPartsInstrumental = ['двадцатью', 'тридцатью', 'сорок', 'пятьюдесятью', 'шестьюдесятью', 'семьюдесятью', 'восемьюдесятью', 'девяноста', 'сто']
+  
+  if (prepositions.includes(correctParts[0]?.toLowerCase() || '')) {
+    // 6格情况：介词 + 数词 + 名词
+    // 检查是否是复合数词（如"о сорока восьми странах"）
+    const firstNumeralPart = correctParts[1]
+    if (firstNumeralPart && compoundFirstPartsGenitive.includes(firstNumeralPart) && correctParts.length > 2) {
+      // 复合数词：取前两个词作为数词
+      correctNumeral = correctParts.slice(1, 3).join(' ')
+      correctNoun = correctParts.slice(3).join(' ')
+    } else {
+      // 简单数词
+      correctNumeral = correctParts[1] || ''
+      correctNoun = correctParts.slice(2).join(' ')
+    }
+  } else {
+    // 普通情况：数词 + 名词
+    const firstNumeralPart = correctParts[0]
+    if (firstNumeralPart && (compoundFirstParts.includes(firstNumeralPart) || compoundFirstPartsGenitive.includes(firstNumeralPart) || compoundFirstPartsInstrumental.includes(firstNumeralPart)) && correctParts.length > 1) {
+      // 复合数词：取前两个词作为数词（如"двадцать пять"、"двадцати пяти"、"двадцатью пятью"）
+      correctNumeral = correctParts.slice(0, 2).join(' ')
+      correctNoun = correctParts.slice(2).join(' ')
+    } else {
+      // 简单数词
+      correctNumeral = correctParts[0] || ''
+      correctNoun = correctParts.slice(1).join(' ')
+    }
+  }
+  
+  const targetParts = sentence.targetWord.split(' ')
+  const targetNumeral = targetParts[0]
+  const targetNoun = targetParts.slice(1).join(' ')
+  
+  currentNumNounSentence.value = {
+    ...sentence,
+    correctNumeral: correctNumeral || '',
+    correctNoun: correctNoun || '',
+    targetNumeral: targetNumeral || '',
+    targetNoun: targetNoun || '',
+    numeralOptions: sentence.numeralOptions || generateNumeralOptions(correctNumeral || '', targetNumeral || '', sentence.case, sentence.number),
+    nounOptions: sentence.nounOptions || generateNumNounOptions(correctNoun || '', targetNoun || '', sentence.case, sentence.number)
+  }
+}
+
+const handleNumeralClick = (event: MouseEvent) => {
+  const rect = (event.target as HTMLElement).getBoundingClientRect()
+  numNounDropdownTop.value = rect.bottom + window.scrollY
+  numNounDropdownLeft.value = rect.left + window.scrollX
+  numNounShowDropdown.value = 'numeral'
+}
+
+const handleNumNounClick = (event: MouseEvent) => {
+  const rect = (event.target as HTMLElement).getBoundingClientRect()
+  numNounDropdownTop.value = rect.bottom + window.scrollY
+  numNounDropdownLeft.value = rect.left + window.scrollX
+  numNounShowDropdown.value = 'noun'
+}
+
+const chooseNumeral = (option: string) => {
+  numNounSelectedNumeral.value = option
+  numNounShowDropdown.value = null
+}
+
+const chooseNumNoun = (option: string) => {
+  numNounSelectedNoun.value = option
+  numNounShowDropdown.value = null
+}
+
+const generateNumeralOptions = (correctNumeral: string, targetNumeral: string, _caseNum: number, _number: string) => {
+  const options = [correctNumeral]
+  
+  const distractors = getNumeralDistractors(targetNumeral, correctNumeral)
+  
+  const targetNum = parseInt(targetNumeral)
+  const isTwoDigit = targetNum >= 10 && targetNum < 100
+  
+  for (const distractor of distractors) {
+    if (options.length >= 4) break
+    // 对于两位数，只添加完整的复合数词干扰项
+    if (isTwoDigit) {
+      // 两位数：干扰项应该是完整的复合数词形式
+      if (distractor && distractor.includes(' ')) {
+        if (!options.includes(distractor)) {
+          options.push(distractor)
+        }
+      }
+    } else {
+      // 个位数：正常添加干扰项
+      if (!options.includes(distractor)) {
+        options.push(distractor)
+      }
+    }
+  }
+  
+  return shuffleArray(options)
+}
+
+const getNumeralDistractors = (targetNumeral: string, correctNumeral: string) => {
+  const distractors: string[] = []
+  
+  const targetNum = parseInt(targetNumeral)
+  
+  if (targetNum === 1) {
+    distractors.push('одна', 'одно', 'одного', 'одной', 'одним')
+  } else if (targetNum === 2) {
+    distractors.push('две', 'двух', 'двум', 'двумя')
+  } else if (targetNum === 3) {
+    distractors.push('трёх', 'трём', 'тремя')
+  } else if (targetNum === 4) {
+    distractors.push('четырёх', 'четырём', 'четырьмя')
+  } else if (targetNum === 5) {
+    distractors.push('пяти', 'пятью')
+  } else if (targetNum === 8) {
+    distractors.push('восьми', 'восемью')
+  } else if (targetNum === 10) {
+    distractors.push('десять', 'десяти', 'десятью')
+  } else if (targetNum === 25) {
+    distractors.push('двадцать пять', 'двадцати пяти', 'двадцатью пятью')
+  } else if (targetNum === 48) {
+    distractors.push('сорок восемь', 'сорока восьми', 'сорок восемью')
+  }
+  
+  return distractors.filter(d => d !== correctNumeral)
+}
+
+const checkNumNounAnswer = () => {
+  if (!currentNumNounSentence.value) return
+  
+  const userNum = numNounSelectedNumeral.value.trim().toLowerCase()
+  const userNoun = numNounSelectedNoun.value.trim().toLowerCase()
+  
+  const correctNumeral = currentNumNounSentence.value.correctNumeral.toLowerCase()
+  const correctNoun = currentNumNounSentence.value.correctNoun.toLowerCase()
+  
+  if (userNum === correctNumeral && userNoun === correctNoun) {
+    numNounAnswerResult.value = 'correct'
+  } else {
+    numNounAnswerResult.value = 'incorrect'
+  }
+  
+  numNounShowResult.value = true
+  
+  if (!usedNumNounSentences.value.includes(currentNumNounSentence.value.id)) {
+    usedNumNounSentences.value.push(currentNumNounSentence.value.id)
+  }
+}
+
+const numNounNextQuestion = () => {
+  loadNumNounCombinedSentence()
+}
+
+const getNumNounSentenceParts = computed(() => {
+  if (!currentNumNounSentence.value) return []
+  
+  const sentence = currentNumNounSentence.value
+  
+  const numeral = sentence.targetNumeral || sentence.targetWord.split(' ')[0]
+  const noun = sentence.targetNoun || sentence.targetWord.split(' ').slice(1).join(' ')
+  
+  const numeralIndex = sentence.text.indexOf(numeral)
+  const nounIndex = sentence.text.indexOf(noun)
+  
+  const result = []
+  
+  if (numeralIndex > 0) {
+    result.push({ type: 'text', content: sentence.text.substring(0, numeralIndex) })
+  }
+  
+  result.push({ type: 'numeral', content: numeral })
+  
+  const betweenText = sentence.text.substring(numeralIndex + numeral.length, nounIndex)
+  if (betweenText) {
+    result.push({ type: 'text', content: betweenText })
+  }
+  
+  result.push({ type: 'noun', content: noun })
+  
+  const afterNounText = sentence.text.substring(nounIndex + noun.length)
+  if (afterNounText) {
+    result.push({ type: 'text', content: afterNounText })
+  }
+  
+  return result
+})
 
 // 将句子拆分为文本、物主代词和名词三部分
 const getPossNounSentenceParts = computed(() => {
@@ -10986,6 +11839,20 @@ const handleClickOutside = (event: MouseEvent) => {
   if (!isClickOnAdjectiveTarget && !isClickOnDropdown) {
     personalPronounShowDropdown.value = false
   }
+  
+  // 处理数词+名词组合训练的下拉菜单
+  const isClickOnNumNounTarget = target.closest('.num-noun-target')
+  if (!isClickOnNumNounTarget && !isClickOnDropdown) {
+    numNounShowDropdown.value = null
+  }
+  
+  // 处理筛选下拉菜单
+  const isClickOnFilter = target.closest('.filter-container')
+  if (!isClickOnFilter) {
+    adjNounShowFilterDropdown.value = false
+    possNounShowFilterDropdown.value = false
+    numNounShowFilterDropdown.value = false
+  }
 }
 
 // 组件挂载时添加点击事件监听器
@@ -11878,17 +12745,19 @@ const shufflePossibleEndings = (sentence: any) => {
         <h2 class="mobile-only">变格规则</h2>
         
         <!-- 分类导航条 - 可滑动 -->
-        <div class="rules-category-nav mobile-only">
-          <div class="category-scroll">
+        <div class="rules-category-nav mobile-only" ref="rulesCategoryNav">
+          <div class="category-scroll" ref="categoryScroll">
             <button 
               v-for="cat in [
                 { id: 'noun', label: '名词' },
                 { id: 'adjective', label: '形容词' },
                 { id: 'personal-pronoun', label: '人称代词' },
                 { id: 'possessive-pronoun', label: '物主代词' },
+                { id: 'numeral', label: '数词' },
                 { id: 'other', label: '其他' }
               ]" 
               :key="cat.id"
+              :ref="el => { if (el) setCategoryBtnRef(cat.id, el) }"
               class="category-btn"
               :class="{ active: selectedRulesCategory === cat.id }"
               @click="selectRulesCategory(cat.id as RulesCategory)"
@@ -11902,6 +12771,7 @@ const shufflePossibleEndings = (sentence: any) => {
         <p class="instruction mobile-only" v-else-if="selectedRulesCategory === 'adjective'">形容词变格规则</p>
         <p class="instruction mobile-only" v-else-if="selectedRulesCategory === 'personal-pronoun'">人称代词变格规则</p>
         <p class="instruction mobile-only" v-else-if="selectedRulesCategory === 'possessive-pronoun'">物主代词变格规则</p>
+        <p class="instruction mobile-only" v-else-if="selectedRulesCategory === 'numeral'">数词变格规则</p>
         <p class="instruction mobile-only" v-else-if="selectedRulesCategory === 'other'">指示代词、疑问词、反身代词变格规则</p>
         
         <!-- 变格规则内容 - 移动端 -->
@@ -12305,7 +13175,7 @@ const shufflePossibleEndings = (sentence: any) => {
           
           <!-- 形容词分类 -->
           <template v-else-if="selectedRulesCategory === 'adjective'">
-            <div class="declension-table-section">
+            <div class="declension-table-section adjective-hard-change">
               <h3>硬变化</h3>
               <p class="table-description">适用于词干以硬辅音结尾的形容词<br>（如 новый、молодой）<br>特殊：词干以 г, к, х结尾的形容词<br>（如 долгий, дорогой, русский, тихий, плохой）</p>
               <table class="declension-table">
@@ -12369,7 +13239,7 @@ const shufflePossibleEndings = (sentence: any) => {
               </div>
               
               <!-- 软变化形容词 -->
-            <div class="declension-table-section">
+            <div class="declension-table-section adjective-soft-change">
               <h3>软变化</h3>
               <p class="table-description">适用于词干以软辅音结尾的形容词<br>（如 синий,летний ）</p>
               
@@ -13060,6 +13930,148 @@ const shufflePossibleEndings = (sentence: any) => {
             </div>
           </template>
           
+          <!-- 数词分类 -->
+          <template v-else-if="selectedRulesCategory === 'numeral'">
+            <div class="numeral-category">
+            <div class="declension-table-section">
+              <h3>数词+名词 变格规则</h3>
+              <p class="table-description">在俄语中，数词后面的名词不总是用1格复数形式，而是要根据数量选用特定“格”。</p>
+              <table class="declension-table">
+                <thead>
+                  <tr>
+                    <th>数词</th>
+                    <th>名词格</th>
+                    <th>示例</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>1</td><td>1格单数</td><td>один стол</td></tr>
+                  <tr><td>2, 3, 4</td><td>2格单数</td><td>два стола</td></tr>
+                  <tr><td>5及以上</td><td>2格复数</td><td>пять столов</td></tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <div class="declension-table-section numeral-rules">
+              <h3>数词变格规则</h3>
+              <p class="table-description">1、一般情况下，与ночь（以ь结尾的阴性名词）的变格规则类似，但不区分单复数。</p>
+              <p class="table-description">2、十位数、百位数、千位数等复合数词，前后都要变化。例如：двадцать пять（25），2/3/6格为двадцати пяти，5格为двадцатью пятью</p>
+              <p class="table-description">3、тысяча (千)的变格规则类似книга，但不分单复数。</p>
+              <p class="table-description">4、миллион / миллиард (百万/十亿)的变格规则类似стол，但不分单复数。</p>
+            </div>
+            
+            <div class="declension-table-section">
+              <h3>数词特殊变格</h3>
+              <p class="table-description">1~4、8、40、90、100</p>
+            </div>
+              
+            <div class="declension-table-section">
+              <h3>один</h3>
+              <table class="declension-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>阳性</th>
+                    <th>中性</th>
+                    <th>阴性</th>
+                    <th>复数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>1格</td><td>один</td><td>одно</td><td>одна</td><td>одни</td></tr>
+                  <tr><td>2格</td><td>одного</td><td>одного</td><td>одной</td><td>одних</td></tr>
+                  <tr><td>3格</td><td>одному</td><td>одному</td><td>одной</td><td>одним</td></tr>
+                  <tr><td>4格</td><td>同1或2</td><td>одно</td><td>одну</td><td>同1或2</td></tr>
+                  <tr><td>5格</td><td>одним</td><td>одним</td><td>одной</td><td>одними</td></tr>
+                  <tr><td>6格</td><td>об одном</td><td>об одном</td><td>об одной</td><td>об одних</td></tr>
+                </tbody>
+              </table>
+              <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+            </div>
+              
+            <div class="declension-table-section">
+              <h3>два</h3>
+              <table class="declension-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>阳性 / 中性</th>
+                    <th>阴性</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>1格</td><td>два</td><td>две</td></tr>
+                  <tr><td>2格</td><td>двух</td><td>двух</td></tr>
+                  <tr><td>3格</td><td>двум</td><td>двум</td></tr>
+                  <tr><td>4格</td><td>同1或2</td><td>同1或2</td></tr>
+                  <tr><td>5格</td><td>двумя</td><td>двумя</td></tr>
+                  <tr><td>6格</td><td>о двух</td><td>о двух</td></tr>
+                </tbody>
+              </table>
+              <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+            </div>
+              
+            <div class="declension-table-section">
+              <h3>три</h3>
+              <table class="declension-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>变化（不分性）</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>1格</td><td>три</td></tr>
+                  <tr><td>2格</td><td>трёх</td></tr>
+                  <tr><td>3格</td><td>трём</td></tr>
+                  <tr><td>4格</td><td>同1或2</td></tr>
+                  <tr><td>5格</td><td>тремя</td></tr>
+                  <tr><td>6格</td><td>о трёх</td></tr>
+                </tbody>
+              </table>
+              <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+            </div>
+              
+            <div class="declension-table-section">
+              <h3>четыре</h3>
+              <table class="declension-table">
+                <thead>
+                  <tr>
+                    <th>格</th>
+                    <th>变化（不分性）</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>1格</td><td>четыре</td></tr>
+                  <tr><td>2格</td><td>четырёх</td></tr>
+                  <tr><td>3格</td><td>четырём</td></tr>
+                  <tr><td>4格</td><td>同1或2</td></tr>
+                  <tr><td>5格</td><td>четырьмя</td></tr>
+                  <tr><td>6格</td><td>о четырёх</td></tr>
+                </tbody>
+              </table>
+              <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+            </div>
+              
+            <div class="declension-table-section">
+              <h3>восемь</h3>
+              <p class="table-description">восемь 变格时中间的 е 会脱落。</p>
+              <div class="rule-text">
+                <p>2/3/6格：восьми</p>
+                <p>5格：восемью 或 восьмью</p>
+              </div>
+            </div>
+              
+            <div class="declension-table-section">
+              <h3>сорок、девяносто、сто</h3>
+              <div class="rule-text">
+                <p>1/4格：原形</p>
+                <p>其他格：-а (сорока, девяноста, ста)</p>
+              </div>
+            </div>
+            </div>
+          </template>
+          
           <!-- 其他分类 -->
           <template v-else-if="selectedRulesCategory === 'other'">
             <!-- этот (这个) -->
@@ -13358,6 +14370,15 @@ const shufflePossibleEndings = (sentence: any) => {
               @click="toggleDesktopCategory('possessive-pronoun')"
             >
               物主代词
+            </button>
+            
+            <!-- 数词分类 -->
+            <button 
+              class="category-main-btn"
+              :class="{ active: selectedDesktopCategory === 'numeral' }"
+              @click="toggleDesktopCategory('numeral')"
+            >
+              数词
             </button>
             
             <!-- 其他分类 -->
@@ -14241,6 +15262,154 @@ const shufflePossibleEndings = (sentence: any) => {
               </div>
             </template>
             
+            <!-- 数词分类内容 -->
+            <template v-else-if="selectedDesktopCategory === 'numeral'">
+              <div class="category-content">
+                <h3>数词变格规则</h3>
+                
+                <div class="declension-table-section">
+                  <h3>数词+名词 变格规则</h3>
+                  <p class="table-description">在俄语中，数词后面的名词不总是用1格复数形式，而是要根据数词的特定要求，使用单数或复数的特定"格"。</p>
+                  <table class="declension-table">
+                    <thead>
+                      <tr>
+                        <th>数词</th>
+                        <th>名词格</th>
+                        <th>示例</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1</td><td>单数第一格</td><td>один стол</td></tr>
+                      <tr><td>2, 3, 4</td><td>单数第二格</td><td>два стола, три стола, четыре стола</td></tr>
+                      <tr><td>5及以上</td><td>复数第二格</td><td>пять столов, шесть столов</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>数词变格规则</h3>
+                  <div class="rule-text-left">
+                    <p>1、一般情况下，与ночь（以ь结尾的阴性名词）的变格规则类似，但不区分单复数。</p>
+                    <p>2、十位数、百位数、千位数等复合数词，前后都要变化。例如：двадцать пять（25），2/3/6格为двадцати пяти，5格为двадцатью пятью</p>
+                    <p>3、тысяча (千)的变格规则类似книга，但不分单复数。</p>
+                    <p>4、миллион / миллиард (百万/十亿)的变格规则类似стол，但不分单复数。</p>
+                  </div>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>数词特殊变格</h3>
+                  <p class="table-description">1~4、8、40、90、100</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>один</h3>
+                  <table class="declension-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性</th>
+                        <th>中性</th>
+                        <th>阴性</th>
+                        <th>复数</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>один</td><td>одно</td><td>одна</td><td>одни</td></tr>
+                      <tr><td>2格</td><td>одного</td><td>одного</td><td>одной</td><td>одних</td></tr>
+                      <tr><td>3格</td><td>одному</td><td>одному</td><td>одной</td><td>одним</td></tr>
+                      <tr><td>4格</td><td>同1或2</td><td>одно</td><td>одну</td><td>同1或2</td></tr>
+                      <tr><td>5格</td><td>одним</td><td>одним</td><td>одной</td><td>одними</td></tr>
+                      <tr><td>6格</td><td>об одном</td><td>об одном</td><td>об одной</td><td>об одних</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>два</h3>
+                  <table class="declension-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>阳性 / 中性</th>
+                        <th>阴性</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>два</td><td>две</td></tr>
+                      <tr><td>2格</td><td>двух</td><td>двух</td></tr>
+                      <tr><td>3格</td><td>двум</td><td>двум</td></tr>
+                      <tr><td>4格</td><td>同1或2</td><td>同1或2</td></tr>
+                      <tr><td>5格</td><td>двумя</td><td>двумя</td></tr>
+                      <tr><td>6格</td><td>о двух</td><td>о двух</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>три</h3>
+                  <table class="declension-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>变化（不分性）</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>три</td></tr>
+                      <tr><td>2格</td><td>трёх</td></tr>
+                      <tr><td>3格</td><td>трём</td></tr>
+                      <tr><td>4格</td><td>同1或2</td></tr>
+                      <tr><td>5格</td><td>тремя</td></tr>
+                      <tr><td>6格</td><td>о трёх</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>четыре</h3>
+                  <table class="declension-table">
+                    <thead>
+                      <tr>
+                        <th>格</th>
+                        <th>变化（不分性）</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>1格</td><td>четыре</td></tr>
+                      <tr><td>2格</td><td>четырех</td></tr>
+                      <tr><td>3格</td><td>четырём</td></tr>
+                      <tr><td>4格</td><td>同1或2</td></tr>
+                      <tr><td>5格</td><td>четырьмя</td></tr>
+                      <tr><td>6格</td><td>о четырёх</td></tr>
+                    </tbody>
+                  </table>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>восемь</h3>
+                  <p class="table-description">восемь 变格时中间的 е 会脱落。</p>
+                  <div class="rule-text">
+                    <p>2/3/6格：восьми</p>
+                    <p>5格：восемью 或 восьмью</p>
+                  </div>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+                
+                <div class="declension-table-section">
+                  <h3>сорок、девяносто、сто</h3>
+                  <div class="rule-text">
+                    <p>1/4格：原形</p>
+                    <p>其他格：-а (сорока, девяноста, ста)</p>
+                  </div>
+                  <p class="table-note">修饰非动物名词时，4格形式等于1格；修饰动物名词时，4格形式等于2格</p>
+                </div>
+              </div>
+            </template>
+            
             <!-- 其他分类内容 -->
             <template v-else-if="selectedDesktopCategory === 'other'">
               <div class="category-content">
@@ -14604,6 +15773,12 @@ const shufflePossibleEndings = (sentence: any) => {
             >
               物主代词+名词
             </button>
+            <button 
+              class="case-btn"
+              @click="navigateTo('num-noun-combined')"
+            >
+              数词+名词
+            </button>
           </div>
         </div>
       </div>
@@ -14626,6 +15801,24 @@ const shufflePossibleEndings = (sentence: any) => {
               <p v-else>
                 要求：将形容词和名词变为相应格的<strong class="highlight-number">复数形式</strong>
               </p>
+            </div>
+            
+            <!-- 格筛选 -->
+            <div v-if="currentAdjNounSentence" class="filter-container">
+              <div class="filter-header" @click="adjNounShowFilterDropdown = !adjNounShowFilterDropdown">
+                <span>题目类型：{{ adjNounCaseFilter === null ? '不限制' : '仅' + adjNounCaseFilter + '格' }}</span>
+                <svg class="filter-icon" :class="{ rotated: adjNounShowFilterDropdown }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
+              <div v-if="adjNounShowFilterDropdown" class="filter-dropdown">
+                <div class="filter-option" @click="adjNounCaseFilter = null; adjNounShowFilterDropdown = false; usedAdjNounSentences = []; loadAdjNounCombinedSentence()">
+                  不限制
+                </div>
+                <div v-for="caseNum in [2, 3, 4, 5, 6]" :key="caseNum" class="filter-option" @click="adjNounCaseFilter = caseNum; adjNounShowFilterDropdown = false; usedAdjNounSentences = []; loadAdjNounCombinedSentence()">
+                  仅{{ caseNum }}格
+                </div>
+              </div>
             </div>
             
             <div v-if="currentAdjNounSentence" class="sentence-container">
@@ -14745,6 +15938,24 @@ const shufflePossibleEndings = (sentence: any) => {
               </p>
             </div>
             
+            <!-- 格筛选 -->
+            <div v-if="currentPossNounSentence" class="filter-container">
+              <div class="filter-header" @click="possNounShowFilterDropdown = !possNounShowFilterDropdown">
+                <span>题目类型：{{ possNounCaseFilter === null ? '不限制' : '仅' + possNounCaseFilter + '格' }}</span>
+                <svg class="filter-icon" :class="{ rotated: possNounShowFilterDropdown }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
+              <div v-if="possNounShowFilterDropdown" class="filter-dropdown">
+                <div class="filter-option" @click="possNounCaseFilter = null; possNounShowFilterDropdown = false; usedPossNounSentences = []; loadPossNounCombinedSentence()">
+                  不限制
+                </div>
+                <div v-for="caseNum in [2, 3, 4, 5, 6]" :key="caseNum" class="filter-option" @click="possNounCaseFilter = caseNum; possNounShowFilterDropdown = false; usedPossNounSentences = []; loadPossNounCombinedSentence()">
+                  仅{{ caseNum }}格
+                </div>
+              </div>
+            </div>
+            
             <div v-if="currentPossNounSentence" class="sentence-container">
               <div class="sentence-content">
                 <p class="sentence">
@@ -14841,10 +16052,159 @@ const shufflePossibleEndings = (sentence: any) => {
           </div>
         </div>
       </div>
+
+      <!-- 数词+名词组合训练页面 -->
+      <div v-else-if="currentPage === 'num-noun-combined'" class="page-content page-full-width">
+        <div class="practice-container">
+          <div class="practice-header">
+            <button class="back-btn" @click="navigateTo('combined-training')">
+              <ArrowLeft class="back-icon" />
+            </button>
+            <h2>数词+名词</h2>
+          </div>
+          <div class="practice-content">
+            <!-- 要求信息 -->
+            <div v-if="currentNumNounSentence" class="hint-text">
+              <p v-if="currentNumNounSentence.number === '单数'">
+                要求：将数词和名词变为相应格的<strong class="highlight-number">单数形式</strong>
+              </p>
+              <p v-else>
+                要求：将数词和名词变为相应格的<strong class="highlight-number">复数形式</strong>
+              </p>
+            </div>
+            
+            <!-- 格筛选 -->
+            <div v-if="currentNumNounSentence" class="filter-container">
+              <div class="filter-header" @click="numNounShowFilterDropdown = !numNounShowFilterDropdown">
+                <span>题目类型：{{ numNounCaseFilter === null ? '不限制' : '仅' + numNounCaseFilter + '格' }}</span>
+                <svg class="filter-icon" :class="{ rotated: numNounShowFilterDropdown }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
+              <div v-if="numNounShowFilterDropdown" class="filter-dropdown">
+                <div class="filter-option" @click="numNounCaseFilter = null; numNounShowFilterDropdown = false; usedNumNounSentences = []; loadNumNounCombinedSentence()">
+                  不限制
+                </div>
+                <div v-for="caseNum in [2, 3, 4, 5, 6]" :key="caseNum" class="filter-option" @click="numNounCaseFilter = caseNum; numNounShowFilterDropdown = false; usedNumNounSentences = []; loadNumNounCombinedSentence()">
+                  仅{{ caseNum }}格
+                </div>
+              </div>
+            </div>
+            
+            <div v-if="currentNumNounSentence" class="sentence-container">
+              <div class="sentence-content">
+                <p class="sentence">
+                  <template v-for="(part, index) in getNumNounSentenceParts" :key="index">
+                    <span v-if="part.type === 'text'">{{ part.content }}</span>
+                    <span v-else-if="part.type === 'numeral'" 
+                          class="target-word num-noun-target numeral-word" 
+                          :class="{ 'selected': numNounSelectedNumeral, 'has-blue-underline': numNounSelectedNumeral }"
+                          @click="handleNumeralClick($event)">
+                      {{ numNounSelectedNumeral || part.content }}
+                    </span>
+                    <span v-else-if="part.type === 'noun'" 
+                          class="target-word num-noun-target noun-word" 
+                          :class="{ 'selected': numNounSelectedNoun, 'has-red-underline': numNounSelectedNoun }"
+                          @click="handleNumNounClick($event)">
+                      {{ numNounSelectedNoun || part.content }}
+                    </span>
+                  </template>
+                </p>
+                
+                <!-- 右侧提交按钮（仅电脑端） -->
+                <div class="right-submit-btn-container">
+                  <button v-if="!numNounShowResult" class="desktop-submit-btn right-submit-btn" @click="checkNumNounAnswer" :disabled="!numNounSelectedNumeral || !numNounSelectedNoun">
+                    提交
+                  </button>
+                </div>
+              </div>
+              
+              <!-- 数词下拉菜单 -->
+              <div v-if="numNounShowDropdown === 'numeral'" 
+                   class="dropdown-container" 
+                   :style="{ top: numNounDropdownTop + 'px', left: numNounDropdownLeft + 'px' }">
+                <div class="dropdown">
+                  <button 
+                    v-for="(option, index) in currentNumNounSentence.numeralOptions" 
+                    :key="index"
+                    class="dropdown-item"
+                    @click.stop="chooseNumeral(option)"
+                  >
+                    {{ option }}
+                  </button>
+                </div>
+              </div>
+              
+              <!-- 名词下拉菜单 -->
+              <div v-if="numNounShowDropdown === 'noun'" 
+                   class="dropdown-container" 
+                   :style="{ top: numNounDropdownTop + 'px', left: numNounDropdownLeft + 'px' }">
+                <div class="dropdown">
+                  <button 
+                    v-for="(option, index) in currentNumNounSentence.nounOptions" 
+                    :key="index"
+                    class="dropdown-item"
+                    @click.stop="chooseNumNoun(option)"
+                  >
+                    {{ option }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 提交按钮 -->
+            <div v-if="currentNumNounSentence && !numNounShowResult" class="input-container">
+              <button class="submit-btn" @click="checkNumNounAnswer" :disabled="!numNounSelectedNumeral || !numNounSelectedNoun">
+                提交
+              </button>
+            </div>
+            
+            <!-- 答案结果 -->
+            <div v-if="numNounShowResult && currentNumNounSentence" class="result-container">
+              <div class="result-icon" :class="numNounAnswerResult">
+                {{ numNounAnswerResult === 'correct' ? '✔' : '❌' }}
+              </div>
+              <div class="result-message">
+                <p v-if="numNounAnswerResult === 'correct'" class="correct-message">
+                  正确！
+                </p>
+                <p v-else-if="numNounAnswerResult === 'incorrect'" class="incorrect-message">
+                  错误！
+                </p>
+                <p class="explanation" v-if="numNounAnswerResult === 'incorrect'">
+                  正确答案：
+                  <span>{{ currentNumNounSentence.correctAnswer }}</span>
+                </p>
+                <p class="explanation">
+                  {{ currentNumNounSentence.explanation }}
+                </p>
+              </div>
+              <button class="next-btn" @click="numNounNextQuestion">
+                下一题
+              </button>
+            </div>
+            <p v-else-if="!currentNumNounSentence" class="hint-text">加载中...</p>
+          </div>
+        </div>
+      </div>
     </main>
 
     <!-- 底部栏 -->
     <!-- 底部栏已移除，使用侧边栏导航 -->
+    
+    <!-- 更新公告弹窗 -->
+    <div v-if="showUpdateModal" class="update-modal-overlay">
+      <div class="update-modal">
+        <h3 class="update-modal-title">更新公告</h3>
+        <div class="update-modal-content">
+          <p>1、变格规则页面新增"数词"分类。</p>
+          <p>2、移动端变格规则页面的分类导航栏现在可以滑动。</p>
+          <p>3、组合训练新增“数词+名词训练”。</p>
+          <p>4、组合训练新增筛选功能，可以限定格进行训练。</p>
+        </div>
+        <button class="update-modal-btn" @click="closeUpdateModal">我知道了</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -15192,6 +16552,8 @@ body {
   color: #3498db;
 }
 
+
+
 /* 响应式设计 */
 @media (max-width: 1200px) {
   /* 小屏幕标题大小 */
@@ -15370,6 +16732,30 @@ body {
   margin-bottom: 1.5rem;
   text-align: center;
   font-size: 0.9rem;
+}
+
+/* 规则文本样式 */
+.rule-text {
+  padding: 0;
+  margin: 10px 0;
+}
+
+.rule-text p {
+  margin: 8px 0;
+  text-align: center;
+  color: black !important;
+  line-height: 1.4;
+}
+
+.rule-text-left {
+  padding: 0;
+  margin: 10px 0;
+}
+
+.rule-text-left p {
+  margin: 8px 0;
+  text-align: left;
+  line-height: 1.4;
 }
 
 /* 分类导航条样式 */
@@ -15785,6 +17171,74 @@ body {
   display: none;
 }
 
+/* 筛选条样式 */
+.filter-container {
+  position: relative;
+  margin-bottom: 0.5rem;
+}
+
+.filter-header {
+  display: flex;
+  align-items: center;
+  background-color: white;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.8rem;
+  color: #666;
+  position: relative;
+}
+
+.filter-header span {
+  flex: 1;
+  text-align: center;
+}
+
+.filter-icon {
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+}
+
+.filter-header:hover {
+  background-color: #f8f9fa;
+}
+
+.filter-icon {
+  width: 12px;
+  height: 12px;
+  transition: transform 0.2s ease;
+}
+
+.filter-icon.rotated {
+  transform: rotate(180deg);
+}
+
+.filter-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: white;
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  margin-top: 1px;
+}
+
+.filter-option {
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.filter-option:hover {
+  background-color: #f8f9fa;
+}
+
 .sentence-container {
   background-color: white;
   padding: 1rem;
@@ -15862,6 +17316,26 @@ body {
   .declension-rules-desktop .declension-table th,
   .declension-rules-desktop .declension-table td {
     padding: 8px 12px;
+  }
+
+  /* 数词+名词变格规则电脑端样式 */
+  .declension-rules-desktop .declension-table-section:nth-child(1) .table-description {
+    font-size: 0.95rem;
+    line-height: 1.8;
+    text-align: left;
+    padding: 0.5rem 0;
+    margin-bottom: 0.8rem;
+  }
+
+  .declension-rules-desktop .declension-table-section:nth-child(1) .declension-table {
+    font-size: 0.9rem;
+    width: 100%;
+    overflow-x: visible;
+  }
+
+  .declension-rules-desktop .declension-table-section:nth-child(1) .declension-table th,
+  .declension-rules-desktop .declension-table-section:nth-child(1) .declension-table td {
+    padding: 10px 15px;
   }
 
   .declension-rules-desktop .table-note {
@@ -15944,6 +17418,19 @@ body {
 }
 
 .poss-noun-target:hover {
+  background-color: #f0f0f0;
+}
+
+/* 数词+名词训练目标词样式 */
+.num-noun-target {
+  color: #000000;
+  font-weight: bold;
+  cursor: pointer;
+  position: relative;
+  padding: 0 2px;
+}
+
+.num-noun-target:hover {
   background-color: #f0f0f0;
 }
 
@@ -17841,6 +19328,60 @@ body {
     padding: 1rem;
   }
   
+  /* 数词分类规则变格移动端样式 */
+  .numeral-rules .table-description {
+    font-size: 0.8rem;
+    line-height: 2;
+    text-align: left;
+    padding: 0.2rem 0.5rem;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  /* 数词+名词变格规则样式 */
+  .numeral-category .declension-table-section:nth-child(1) .table-description {
+    font-size: 0.8rem;
+    line-height: 1.6;
+    text-align: left;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  .numeral-category .declension-table-section:nth-child(1) .declension-table {
+    font-size: 0.75rem;
+    width: 100%;
+    overflow-x: auto;
+  }
+  
+  .numeral-category .declension-table-section:nth-child(1) .declension-table th,
+  .numeral-category .declension-table-section:nth-child(1) .declension-table td {
+    padding: 0.3rem 0.5rem;
+    text-align: center;
+    white-space: nowrap;
+  }
+  
+  .rule-text {
+    font-size: 0.8rem;
+    line-height: 1.5;
+  }
+  
+  /* 分类导航栏按钮间距 */
+  .category-btn {
+    padding: 12px 10px !important;
+    font-size: 0.9rem !important;
+    white-space: nowrap !important;
+    flex: 0 0 auto !important;
+  }
+  
+  .category-scroll {
+    gap: 0 !important;
+    justify-content: flex-start !important;
+    flex-wrap: nowrap !important;
+    padding: 0 !important;
+  }
+  
   /* 格按钮样式 */
   .case-buttons {
     grid-template-columns: repeat(2, 1fr);
@@ -18280,7 +19821,7 @@ body {
 
 .table-description {
   color: #7f8c8d;
-  margin-bottom: 1.2rem;
+  margin-bottom: 1rem;
   line-height: 1.5;
   font-size: 0.9rem;
 }
@@ -18581,6 +20122,161 @@ body {
   .page-full-width .instruction {
     text-align: center;
   }
+  
+  /* 移动端形容词硬变化栏目样式 */
+  .adjective-hard-change .table-description {
+    text-align: center;
+    font-size: 0.9rem;
+  }
+  
+  /* 移动端形容词软变化栏目样式 */
+  .adjective-soft-change .table-description {
+    text-align: center;
+    font-size: 0.9rem;
+  }
+  
+  /* 移动端筛选条样式调整 */
+  .filter-container {
+    margin-bottom: 0.3rem;
+    margin-top: 0;
+  }
+  
+  .filter-header {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.75rem;
+  }
+  
+
+  
+  /* 移动端组合训练页面紧凑布局 */
+  .word-selection {
+    margin: 0.3rem 0;
+  }
+  
+  .target-word-container {
+    padding: 0.5rem;
+  }
+  
+  .target-word-base {
+    font-size: 1rem;
+  }
+  
+  .current-ending {
+    font-size: 1rem;
+  }
+  
+  /* 移动端结果容器更紧凑 */
+  .result-container {
+    padding: 0.8rem;
+    gap: 0.5rem;
+  }
+  
+  .result-icon {
+    font-size: 1.3rem;
+    width: 40px;
+    height: 40px;
+    margin-bottom: 0.2rem;
+  }
+  
+  .correct-message,
+  .incorrect-message {
+    font-size: 0.9rem;
+    margin: 0 0 0.3rem 0;
+  }
+  
+  .explanation {
+    font-size: 0.8rem;
+    line-height: 1.3;
+    margin: 0.2rem 0;
+  }
+  
+  .next-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    margin-top: 0.3rem;
+  }
 }
 
+/* 更新公告弹窗样式 */
+.update-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.update-modal {
+  background-color: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  max-width: 90%;
+  width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.update-modal-title {
+  text-align: center;
+  color: #3498db;
+  margin-bottom: 1.5rem;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.update-modal-content {
+  margin-bottom: 1.5rem;
+}
+
+.update-modal-content p {
+  text-align: left;
+  margin: 0.5rem 0;
+  line-height: 1.4;
+}
+
+.update-modal-btn {
+  display: block;
+  width: 100%;
+  padding: 0.8rem;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.update-modal-btn:hover {
+  background-color: #2980b9;
+}
+
+/* 移动端更新公告弹窗样式 */
+@media (max-width: 768px) {
+  .update-modal {
+    padding: 1.5rem;
+    width: 90%;
+  }
+  
+  .update-modal-title {
+    font-size: 1.1rem;
+    margin-bottom: 1.2rem;
+  }
+  
+  .update-modal-content p {
+    font-size: 0.9rem;
+  }
+  
+  .update-modal-btn {
+    padding: 0.7rem;
+    font-size: 0.9rem;
+  }
+}
 </style>

@@ -5,8 +5,9 @@ export default defineConfig({
   plugins: [vue()],
   base: '/declensionRu/',
   server: {
-    host: true,
-    allowedHosts: ['kourtney-topological-precious.ngrok-free.dev']
+    host: '0.0.0.0',
+    port: 5174,
+    strictPort: true
   },
   build: {
     rollupOptions: {
